@@ -1,0 +1,103 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* ═══════════════════════════════════════════
+   Proxiam Design System — Global Styles
+   Inspired by Linear/Apple Health/Nexus-Flow
+   ═══════════════════════════════════════════ */
+
+@layer base {
+  :root {
+    --color-primary: 99 102 241;  /* indigo-500 */
+    --color-surface: 248 250 252; /* slate-50 */
+    --color-text: 15 23 42;       /* slate-900 */
+    --sidebar-width: 260px;
+    --header-height: 56px;
+  }
+
+  .dark {
+    --color-surface: 15 23 42;
+    --color-text: 248 250 252;
+  }
+
+  body {
+    font-family: "Inter", system-ui, sans-serif;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
+  /* Scrollbar — minimal, elegant */
+  ::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+  }
+  ::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  ::-webkit-scrollbar-thumb {
+    background: rgb(148 163 184 / 0.3);
+    border-radius: 3px;
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    background: rgb(148 163 184 / 0.5);
+  }
+}
+
+@layer components {
+  /* Card component — clean, subtle shadow */
+  .card {
+    @apply rounded-xl border border-slate-200 bg-white p-5 shadow-sm transition-shadow hover:shadow-md;
+  }
+  .dark .card {
+    @apply border-slate-700 bg-slate-800;
+  }
+
+  /* Score ring — Apple Watch style */
+  .score-ring {
+    @apply relative inline-flex items-center justify-center;
+  }
+  .score-ring svg {
+    transform: rotate(-90deg);
+  }
+
+  /* Phase badge */
+  .phase-badge {
+    @apply inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-xs font-medium;
+  }
+
+  /* Status indicator — pulse animation for active risks */
+  .status-pulse {
+    @apply relative;
+  }
+  .status-pulse::after {
+    content: "";
+    @apply absolute inset-0 rounded-full animate-ping;
+    animation-duration: 2s;
+  }
+
+  /* KPI card */
+  .kpi-card {
+    @apply card flex flex-col gap-1;
+  }
+  .kpi-card .kpi-value {
+    @apply text-2xl font-bold tracking-tight text-slate-900;
+  }
+  .kpi-card .kpi-label {
+    @apply text-sm text-slate-500;
+  }
+
+  /* Mobile bottom nav */
+  @media (max-width: 768px) {
+    .mobile-nav {
+      @apply fixed bottom-0 left-0 right-0 z-50 flex items-center justify-around border-t border-slate-200 bg-white/80 px-2 py-2 backdrop-blur-lg;
+    }
+  }
+}
+
+@layer utilities {
+  /* Micro-interaction: hover reveal */
+  .hover-reveal {
+    @apply opacity-0 transition-opacity group-hover:opacity-100;
+  }
+}

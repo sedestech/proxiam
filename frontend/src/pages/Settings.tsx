@@ -48,8 +48,8 @@ export default function Settings() {
         <div className="flex items-center gap-3">
           <Globe className="h-5 w-5 text-slate-400" />
           <div className="flex-1">
-            <h3 className="font-semibold text-slate-900 dark:text-white">Langue / Language</h3>
-            <p className="text-sm text-slate-500 dark:text-slate-400">Interface language</p>
+            <h3 className="font-semibold text-slate-900 dark:text-white">{t("settings.language")}</h3>
+            <p className="text-sm text-slate-500 dark:text-slate-400">{t("settings.languageDesc")}</p>
           </div>
           <select
             value={i18n.language}
@@ -67,17 +67,17 @@ export default function Settings() {
         <div className="flex items-center gap-3">
           <Moon className="h-5 w-5 text-slate-400" />
           <div className="flex-1">
-            <h3 className="font-semibold text-slate-900 dark:text-white">Theme</h3>
-            <p className="text-sm text-slate-500 dark:text-slate-400">Light / Dark mode</p>
+            <h3 className="font-semibold text-slate-900 dark:text-white">{t("settings.theme")}</h3>
+            <p className="text-sm text-slate-500 dark:text-slate-400">{t("settings.themeDesc")}</p>
           </div>
           <select
             value={theme}
             onChange={(e) => setTheme(e.target.value as "light" | "dark" | "system")}
             className="rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-sm dark:border-slate-600 dark:bg-slate-700 dark:text-slate-200"
           >
-            <option value="light">Light</option>
-            <option value="dark">Dark</option>
-            <option value="system">System</option>
+            <option value="light">{t("settings.light")}</option>
+            <option value="dark">{t("settings.dark")}</option>
+            <option value="system">{t("settings.system")}</option>
           </select>
         </div>
       </div>
@@ -87,9 +87,9 @@ export default function Settings() {
         <div className="flex items-center gap-3">
           <Key className="h-5 w-5 text-slate-400" />
           <div className="flex-1">
-            <h3 className="font-semibold text-slate-900 dark:text-white">Claude IA</h3>
+            <h3 className="font-semibold text-slate-900 dark:text-white">{t("settings.aiTitle")}</h3>
             <p className="text-sm text-slate-500 dark:text-slate-400">
-              {aiStatus?.message || "Verification..."}
+              {aiStatus?.message || t("settings.aiChecking")}
             </p>
           </div>
           {aiStatus && (
@@ -115,7 +115,7 @@ export default function Settings() {
       <div className="card">
         <div className="flex items-center gap-3 mb-3">
           <Database className="h-5 w-5 text-slate-400" />
-          <h3 className="font-semibold text-slate-900 dark:text-white">Base de donnees</h3>
+          <h3 className="font-semibold text-slate-900 dark:text-white">{t("settings.database")}</h3>
         </div>
         {dbStats && (
           <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
@@ -134,21 +134,21 @@ export default function Settings() {
         <div className="flex items-center gap-3">
           <Search className="h-5 w-5 text-slate-400" />
           <div className="flex-1">
-            <h3 className="font-semibold text-slate-900 dark:text-white">Meilisearch</h3>
+            <h3 className="font-semibold text-slate-900 dark:text-white">{t("settings.search")}</h3>
             <p className="text-sm text-slate-500 dark:text-slate-400">
-              {reindexMsg || "Moteur de recherche full-text"}
+              {reindexMsg || t("settings.searchDesc")}
             </p>
           </div>
           <button
             disabled={reindexing}
             onClick={async () => {
               setReindexing(true);
-              setReindexMsg("Reindexation en cours...");
+              setReindexMsg(t("settings.reindexing"));
               try {
                 const res = await api.post("/api/search/reindex");
-                setReindexMsg(`Reindexe : ${res.data.indexed || 0} documents`);
+                setReindexMsg(`${t("settings.reindexed")} : ${res.data.indexed || 0} ${t("settings.reindexDocs")}`);
               } catch {
-                setReindexMsg("Erreur de reindexation");
+                setReindexMsg(t("settings.reindexError"));
               } finally {
                 setReindexing(false);
               }
@@ -156,7 +156,7 @@ export default function Settings() {
             className="flex items-center gap-2 rounded-lg border border-slate-200 px-3 py-1.5 text-sm font-medium text-slate-600 hover:bg-slate-50 disabled:opacity-50 dark:border-slate-600 dark:text-slate-300 dark:hover:bg-slate-700"
           >
             <RefreshCw className={`h-3.5 w-3.5 ${reindexing ? "animate-spin" : ""}`} />
-            Reindexer
+            {t("settings.reindex")}
           </button>
         </div>
       </div>
@@ -165,7 +165,7 @@ export default function Settings() {
       <div className="card space-y-3">
         <h3 className="flex items-center gap-2 font-semibold text-slate-900 dark:text-white">
           <Download className="h-5 w-5 text-slate-400" />
-          Import / Export
+          {t("settings.importExport")}
         </h3>
         <div className="flex gap-3">
           <button
@@ -173,7 +173,7 @@ export default function Settings() {
             className="flex items-center gap-2 rounded-lg border border-slate-200 px-4 py-2 text-sm font-medium text-slate-600 hover:bg-slate-50 dark:border-slate-600 dark:text-slate-300 dark:hover:bg-slate-700"
           >
             <Upload className="h-4 w-4" />
-            Importer CSV/JSON
+            {t("settings.importCsv")}
           </button>
           <a
             href={`${api.defaults.baseURL || ""}/api/projets/export/csv`}
@@ -181,7 +181,7 @@ export default function Settings() {
             className="flex items-center gap-2 rounded-lg border border-slate-200 px-4 py-2 text-sm font-medium text-slate-600 hover:bg-slate-50 dark:border-slate-600 dark:text-slate-300 dark:hover:bg-slate-700"
           >
             <Download className="h-4 w-4" />
-            Exporter projets CSV
+            {t("settings.exportCsv")}
           </a>
         </div>
       </div>

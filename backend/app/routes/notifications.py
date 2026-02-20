@@ -1,9 +1,8 @@
-"""Notifications API — Sprint 8.
+"""Notifications API — Sprint 10.
 
-Generates notifications from recent database activity:
-- Projects created/updated (from date_creation)
-- Scores calculated (from score_global IS NOT NULL)
-- System events (health status)
+Persistent notifications stored in PostgreSQL.
+Generates real events on project CRUD/scoring/import.
+Supports mark-as-read and filtering.
 """
 from typing import Optional
 
@@ -16,80 +15,96 @@ from app.database import get_db
 router = APIRouter()
 
 
+async def create_notification(
+    db: AsyncSession,
+    *,
+    type: str,
+    title: str,
+    message: str = "",
+    entity_type: Optional[str] = None,
+    entity_id: Optional[str] = None,
+):
+    """Insert a notification row. Call from any route that generates events."""
+    await db.execute(
+        text("""
+            INSERT INTO notifications (type, title, message, entity_type, entity_id)
+            VALUES (:type, :title, :message, :entity_type, :entity_id)
+        """),
+        {
+            "type": type,
+            "title": title,
+            "message": message,
+            "entity_type": entity_type,
+            "entity_id": entity_id,
+        },
+    )
+    await db.commit()
+
+
 @router.get("/notifications")
 async def get_notifications(
-    limit: int = Query(10, le=50),
+    limit: int = Query(20, le=100),
+    unread_only: bool = Query(False),
     db: AsyncSession = Depends(get_db),
 ):
-    """Return recent activity as notifications."""
-    notifications = []
-
-    # Recent projects (last 10)
-    query = text("""
-        SELECT id, nom, filiere, statut, score_global, date_creation
-        FROM projets
-        ORDER BY date_creation DESC
+    """Return notifications from the database."""
+    where = "WHERE read = false" if unread_only else ""
+    query = text(f"""
+        SELECT id, type, title, message, entity_type, entity_id, read, created_at
+        FROM notifications
+        {where}
+        ORDER BY created_at DESC
         LIMIT :limit
     """)
     result = await db.execute(query, {"limit": limit})
     rows = result.mappings().all()
 
-    for row in rows:
-        # Project created event
-        notifications.append({
-            "id": f"proj-{row['id']}",
-            "type": "project_created",
-            "title": f"Projet cree : {row['nom']}",
-            "message": f"Filiere {row['filiere'] or 'inconnue'}, statut {row['statut']}",
-            "timestamp": str(row["date_creation"]) if row["date_creation"] else None,
-            "read": True,
-        })
+    notifications = [
+        {
+            "id": row["id"],
+            "type": row["type"],
+            "title": row["title"],
+            "message": row["message"],
+            "entity_type": row["entity_type"],
+            "entity_id": row["entity_id"],
+            "read": row["read"],
+            "timestamp": row["created_at"].isoformat() if row["created_at"] else None,
+        }
+        for row in rows
+    ]
 
-        # Score event if calculated
-        if row["score_global"] is not None:
-            notifications.append({
-                "id": f"score-{row['id']}",
-                "type": "score_calculated",
-                "title": f"Score calcule : {row['nom']}",
-                "message": f"Score global : {row['score_global']}/100",
-                "timestamp": str(row["date_creation"]) if row["date_creation"] else None,
-                "read": True,
-            })
-
-    # System notification: counts
-    stats_query = text("""
-        SELECT
-            (SELECT COUNT(*) FROM projets) as projets,
-            (SELECT COUNT(*) FROM phases) as phases,
-            (SELECT COUNT(*) FROM normes) as normes,
-            (SELECT COUNT(*) FROM risques) as risques
-    """)
-    stats_result = await db.execute(stats_query)
-    stats = stats_result.mappings().first()
-
-    notifications.insert(0, {
-        "id": "system-stats",
-        "type": "system",
-        "title": "Base de donnees active",
-        "message": f"{stats['projets']} projets, {stats['phases']} phases, {stats['normes']} normes, {stats['risques']} risques",
-        "timestamp": None,
-        "read": False,
-    })
-
-    # Separate system notification, sort the rest by timestamp
-    system_notif = [n for n in notifications if n["type"] == "system"]
-    other_notifs = [n for n in notifications if n["type"] != "system"]
-    other_notifs.sort(
-        key=lambda n: n["timestamp"] or "0000", reverse=True
+    # Counts
+    unread_result = await db.execute(
+        text("SELECT COUNT(*) FROM notifications WHERE read = false")
     )
+    unread_count = unread_result.scalar()
 
-    # Always include system notification, then fill with others
-    final = system_notif + other_notifs[: limit - len(system_notif)]
-
-    unread = sum(1 for n in final if not n["read"])
+    total_result = await db.execute(text("SELECT COUNT(*) FROM notifications"))
+    total_count = total_result.scalar()
 
     return {
-        "notifications": final[:limit],
-        "unread": unread,
-        "total": len(system_notif) + len(other_notifs),
+        "notifications": notifications,
+        "unread": unread_count,
+        "total": total_count,
     }
+
+
+@router.put("/notifications/{notif_id}/read")
+async def mark_as_read(notif_id: int, db: AsyncSession = Depends(get_db)):
+    """Mark a single notification as read."""
+    await db.execute(
+        text("UPDATE notifications SET read = true WHERE id = :id"),
+        {"id": notif_id},
+    )
+    await db.commit()
+    return {"ok": True}
+
+
+@router.put("/notifications/read-all")
+async def mark_all_read(db: AsyncSession = Depends(get_db)):
+    """Mark all notifications as read."""
+    result = await db.execute(
+        text("UPDATE notifications SET read = true WHERE read = false")
+    )
+    await db.commit()
+    return {"ok": True, "updated": result.rowcount}

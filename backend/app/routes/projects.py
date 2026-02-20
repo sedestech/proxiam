@@ -16,6 +16,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
 from app.models import Projet
+from app.routes.notifications import create_notification
 
 router = APIRouter()
 
@@ -276,6 +277,12 @@ async def create_projet(body: ProjetCreate, db: AsyncSession = Depends(get_db)):
     await db.execute(query, params)
     await db.commit()
 
+    await create_notification(
+        db, type="project_created", title=f"Projet cree : {body.nom}",
+        message=f"Filiere {body.filiere or 'inconnue'}, statut {body.statut}",
+        entity_type="projet", entity_id=projet_id,
+    )
+
     # Return the created project
     return await get_projet(projet_id, db)
 
@@ -321,6 +328,12 @@ async def update_projet(
     query = text(f"UPDATE projets SET {set_clause} WHERE id = :id")
     await db.execute(query, params)
     await db.commit()
+
+    await create_notification(
+        db, type="project_updated", title=f"Projet modifie",
+        message=f"Champs mis a jour : {', '.join(update_data.keys())}",
+        entity_type="projet", entity_id=projet_id,
+    )
 
     return await get_projet(projet_id, db)
 
@@ -396,10 +409,22 @@ async def delete_projet(projet_id: str, db: AsyncSession = Depends(get_db)):
     await db.execute(
         text("DELETE FROM projet_documents WHERE projet_id = :id"), {"id": projet_id}
     )
+    # Get name before deleting
+    name_result = await db.execute(
+        text("SELECT nom FROM projets WHERE id = :id"), {"id": projet_id}
+    )
+    name_row = name_result.first()
+
     await db.execute(
         text("DELETE FROM projets WHERE id = :id"), {"id": projet_id}
     )
     await db.commit()
+
+    await create_notification(
+        db, type="project_deleted",
+        title=f"Projet supprime : {name_row[0] if name_row else projet_id}",
+        entity_type="projet", entity_id=projet_id,
+    )
 
     return {"status": "deleted", "id": projet_id}
 
@@ -491,6 +516,14 @@ async def import_projets(
         created.append({"id": new_id, "nom": nom})
 
     await db.commit()
+
+    if created:
+        await create_notification(
+            db, type="import_completed",
+            title=f"Import : {len(created)} projet(s)",
+            message=f"Fichier {filename}, {len(errors)} erreur(s)",
+            entity_type="import",
+        )
 
     return {
         "imported": len(created),

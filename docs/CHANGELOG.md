@@ -1,5 +1,42 @@
 # Changelog — Proxiam OS ENR
 
+## [1.1.0] — 2026-02-20 — Sprint 10 : i18n, Notifications DB, Error Boundaries, UX Documents
+
+### Ajoute
+- **i18n complet** : toutes les strings hardcodees traduites FR/EN
+  - Settings : 16 cles (langue, theme, IA, BDD, search, import/export)
+  - Documents : 6 cles (onglet, upload, download, suppression)
+  - Import : 7 cles (titre, apercu, import, erreurs, fermer)
+  - Delete confirm : 2 cles (titre, message)
+- **Notifications persistantes** : table PostgreSQL `notifications`
+  - `GET /api/notifications` — liste avec pagination, filtres unread
+  - `PUT /api/notifications/{id}/read` — marquer comme lu
+  - `PUT /api/notifications/read-all` — marquer tous comme lus
+  - Generation automatique sur : creation/modification/suppression projet, scoring, import
+  - Seed initial des notifications existantes
+- **Error boundaries par page** : composant `PageErrorBoundary` avec retry/retour
+  - Chaque route lazy-loaded enveloppee individuellement
+  - `QueryError` component reutilisable (message + bouton retry)
+  - Ajoute sur Projects, Admin, Veille pages
+- **Documents UX ameliore** : drag-drop, icons, progress
+  - Zone drag-and-drop sur l'onglet Documents
+  - Icones par type de fichier (PDF rouge, image bleu, Excel vert, Word bleu)
+  - Barre de progression pendant l'upload
+  - Tri par date (plus recent en premier)
+  - Compteur de documents dans l'onglet
+  - Fonction `formatSize` propre (o/Ko/Mo)
+
+### Infrastructure
+- Table `notifications` avec index created_at DESC et read
+- `create_notification()` reutilisable depuis n'importe quelle route
+
+### Tests
+- 296 tests (105 backend + 191 frontend)
+- Nouveaux : test_notifications_db.py (8), Settings.test.ts (17)
+- Mis a jour : test_notifications.py (9 → structure DB)
+
+---
+
 ## [1.0.0] — 2026-02-20 — Sprint 9 : Documents, Import, Settings & Phase Management
 
 ### Ajoute

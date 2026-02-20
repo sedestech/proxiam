@@ -1,5 +1,31 @@
 # Décisions Techniques — Proxiam
 
+## 2026-02-20 : Notifications persistantes dans PostgreSQL (pas en memoire)
+
+**Quoi** : Les notifications sont stockees dans une table PostgreSQL `notifications` avec generation automatique sur chaque action CRUD/scoring/import.
+
+**Pourquoi** : Le systeme precedent (Sprint 8) generait les notifications a la volee a chaque requete depuis les donnees projets. Ca ne permettait ni le "mark as read", ni l'historique, ni les notifications de deletion. La table PostgreSQL permet la persistance, le filtrage par statut lu/non-lu, et la pagination.
+
+**Alternatives rejetees** :
+- Redis pub/sub : pas de persistance longue duree, complexite supplementaire
+- Fichier JSON : pas de requetes SQL, pas de concurrence
+
+## 2026-02-20 : Error boundaries par page (pas global uniquement)
+
+**Quoi** : Chaque route lazy-loaded est enveloppee dans un `PageErrorBoundary` individuel avec boutons retry/retour, au lieu d'un seul ErrorBoundary global.
+
+**Pourquoi** : Un crash dans la page Map ne doit pas faire tomber le Dashboard. L'error boundary par page permet de retry sans recharger toute l'app, et le bouton retour permet de naviguer sans perte de contexte.
+
+## 2026-02-20 : Drag-and-drop natif HTML5 (pas de librairie)
+
+**Quoi** : Le drag-and-drop pour l'upload de documents utilise les events HTML5 natifs (onDragOver, onDragLeave, onDrop) sans librairie tierce.
+
+**Pourquoi** : Pour un seul dropzone simple, ajouter react-dropzone (15 Ko) ou react-dnd (45 Ko) serait du sur-engineering. Les events natifs suffisent et ne necessitent aucune dependance supplementaire.
+
+**Alternatives rejetees** :
+- react-dropzone : trop lourd pour un seul cas d'usage
+- react-dnd : concu pour le drag-and-drop complexe (reordering), overkill ici
+
 ## 2026-02-20 : MinIO pour le stockage documents (pas de filesystem local)
 
 **Quoi** : Les documents uploades sont stockes dans MinIO (S3-compatible), pas sur le filesystem local du serveur.

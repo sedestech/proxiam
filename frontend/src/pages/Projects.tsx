@@ -21,6 +21,7 @@ import {
 } from "lucide-react";
 import api from "../lib/api";
 import ProjectForm from "../components/ProjectForm";
+import QueryError from "../components/QueryError";
 
 interface Projet {
   id: string;
@@ -100,7 +101,7 @@ export default function Projects() {
     errors: { row: number; error: string }[];
   } | null>(null);
 
-  const { data: projets, isLoading } = useQuery<Projet[]>({
+  const { data: projets, isLoading, isError, refetch } = useQuery<Projet[]>({
     queryKey: ["projets", filterFiliere, filterStatut],
     queryFn: async () => {
       const params: Record<string, string> = {};
@@ -237,6 +238,11 @@ export default function Projects() {
         </div>
       )}
 
+      {/* Error */}
+      {isError && (
+        <QueryError onRetry={() => refetch()} />
+      )}
+
       {/* Projects table */}
       {projets && projets.length > 0 && (
         <div className="overflow-hidden rounded-xl border border-slate-200 bg-white">
@@ -339,7 +345,7 @@ export default function Projects() {
           <div className="w-full max-w-2xl rounded-xl bg-white p-6 shadow-xl dark:bg-slate-800">
             <h3 className="flex items-center gap-2 text-lg font-semibold text-slate-900 dark:text-white">
               <FileUp className="h-5 w-5 text-primary-500" />
-              Importer des projets
+              {t("import.title")}
             </h3>
             <p className="mt-1 text-sm text-slate-500">
               CSV (delimiteur point-virgule) ou JSON. Colonnes : nom, filiere, puissance_mwc, surface_ha, commune, departement, region, statut, lon, lat
@@ -351,7 +357,7 @@ export default function Projects() {
                 <label className="mt-4 flex cursor-pointer flex-col items-center rounded-lg border-2 border-dashed border-slate-300 p-6 transition-colors hover:border-primary-400 dark:border-slate-600">
                   <Upload className="h-8 w-8 text-slate-400" />
                   <span className="mt-2 text-sm text-slate-500">
-                    {importFile ? importFile.name : "Choisir un fichier CSV ou JSON"}
+                    {importFile ? importFile.name : t("import.selectFile")}
                   </span>
                   <input
                     type="file"
@@ -421,7 +427,7 @@ export default function Projects() {
                     onClick={() => setShowImport(false)}
                     className="rounded-lg border border-slate-200 px-4 py-2 text-sm font-medium text-slate-600 hover:bg-slate-50 dark:border-slate-600 dark:text-slate-300"
                   >
-                    Annuler
+                    {t("common.cancel")}
                   </button>
                   <button
                     disabled={!importFile || importing}
@@ -438,14 +444,14 @@ export default function Projects() {
                         queryClient.invalidateQueries({ queryKey: ["projets"] });
                         queryClient.invalidateQueries({ queryKey: ["projets-stats"] });
                       } catch {
-                        setImportResult({ imported: 0, errors: [{ row: 0, error: "Erreur serveur" }] });
+                        setImportResult({ imported: 0, errors: [{ row: 0, error: t("import.serverError") }] });
                       } finally {
                         setImporting(false);
                       }
                     }}
                     className="flex items-center gap-2 rounded-lg bg-primary-500 px-4 py-2 text-sm font-medium text-white hover:bg-primary-600 disabled:opacity-50"
                   >
-                    {importing ? "Import en cours..." : "Importer"}
+                    {importing ? t("import.importing") : t("import.importBtn")}
                   </button>
                 </div>
               </>
@@ -454,17 +460,17 @@ export default function Projects() {
               <div className="mt-4 space-y-3">
                 <div className="flex items-center gap-2 rounded-lg bg-emerald-50 p-3 text-sm text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-400">
                   <CheckCircle2 className="h-5 w-5" />
-                  {importResult.imported} projet(s) importe(s)
+                  {importResult.imported} {t("import.imported")}
                 </div>
                 {importResult.errors.length > 0 && (
                   <div className="rounded-lg bg-red-50 p-3 text-sm text-red-700 dark:bg-red-500/10 dark:text-red-400">
                     <div className="flex items-center gap-2">
                       <AlertCircle className="h-5 w-5" />
-                      {importResult.errors.length} erreur(s)
+                      {importResult.errors.length} {t("import.errors")}
                     </div>
                     <ul className="mt-1 ml-7 list-disc text-xs">
                       {importResult.errors.map((err, i) => (
-                        <li key={i}>Ligne {err.row}: {err.error}</li>
+                        <li key={i}>{t("import.errorLine")} {err.row}: {err.error}</li>
                       ))}
                     </ul>
                   </div>
@@ -474,7 +480,7 @@ export default function Projects() {
                     onClick={() => setShowImport(false)}
                     className="rounded-lg bg-primary-500 px-4 py-2 text-sm font-medium text-white hover:bg-primary-600"
                   >
-                    Fermer
+                    {t("import.close")}
                   </button>
                 </div>
               </div>

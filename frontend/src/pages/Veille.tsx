@@ -14,6 +14,7 @@ import {
   XCircle,
 } from "lucide-react";
 import api from "../lib/api";
+import QueryError from "../components/QueryError";
 
 interface Source {
   id: number;
@@ -71,7 +72,7 @@ export default function Veille() {
   const [typeFilter, setTypeFilter] = useState<string>("");
   const [freeFilter, setFreeFilter] = useState<string>("");
 
-  const { data: sources, isLoading } = useQuery<Source[]>({
+  const { data: sources, isLoading, isError, refetch } = useQuery<Source[]>({
     queryKey: ["sources"],
     queryFn: async () => {
       const res = await api.get("/api/sources?limit=500");
@@ -204,6 +205,8 @@ export default function Veille() {
         <div className="flex h-40 items-center justify-center text-sm text-slate-400">
           {t("common.loading")}
         </div>
+      ) : isError ? (
+        <QueryError onRetry={() => refetch()} />
       ) : filtered.length === 0 ? (
         <div className="flex h-40 flex-col items-center justify-center rounded-xl border-2 border-dashed border-slate-200 bg-slate-50/50">
           <Radar className="h-10 w-10 text-slate-300" />

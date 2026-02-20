@@ -34,9 +34,30 @@ import {
   FileText,
   Download,
   File,
+  Image,
+  FileSpreadsheet,
 } from "lucide-react";
 import api from "../lib/api";
 import ProjectForm from "../components/ProjectForm";
+
+function fileTypeIcon(name: string) {
+  const ext = name.split(".").pop()?.toLowerCase() || "";
+  if (["pdf"].includes(ext))
+    return <FileText className="h-5 w-5 shrink-0 text-red-400" />;
+  if (["jpg", "jpeg", "png", "gif", "webp", "svg"].includes(ext))
+    return <Image className="h-5 w-5 shrink-0 text-blue-400" />;
+  if (["xls", "xlsx", "csv"].includes(ext))
+    return <FileSpreadsheet className="h-5 w-5 shrink-0 text-emerald-400" />;
+  if (["doc", "docx"].includes(ext))
+    return <FileText className="h-5 w-5 shrink-0 text-blue-500" />;
+  return <File className="h-5 w-5 shrink-0 text-slate-400" />;
+}
+
+function formatSize(bytes: number): string {
+  if (bytes < 1024) return `${bytes} o`;
+  if (bytes < 1024 * 1024) return `${Math.round(bytes / 1024)} Ko`;
+  return `${(bytes / (1024 * 1024)).toFixed(1)} Mo`;
+}
 
 interface Projet {
   id: string;
@@ -351,7 +372,7 @@ export default function ProjectDetail() {
     { key: "phases", label: t("projects.tabPhases") },
     { key: "score", label: t("projects.tabScore") },
     { key: "ai", label: t("ai.tabLabel") },
-    { key: "documents", label: "Documents" },
+    { key: "documents", label: t("documents.tabLabel") },
   ];
 
   const { data: documents, refetch: refetchDocs } = useQuery<DocumentItem[]>({
@@ -364,6 +385,25 @@ export default function ProjectDetail() {
   });
 
   const [uploading, setUploading] = useState(false);
+  const [dragOver, setDragOver] = useState(false);
+
+  const handleUpload = async (file: globalThis.File) => {
+    setUploading(true);
+    try {
+      const formData = new FormData();
+      formData.append("file", file);
+      formData.append("projet_id", id || "");
+      formData.append("category", "general");
+      await api.post("/api/documents/upload", formData, {
+        headers: { "Content-Type": "multipart/form-data" },
+      });
+      refetchDocs();
+    } catch {
+      // handled by error boundary
+    } finally {
+      setUploading(false);
+    }
+  };
 
   return (
     <div className="space-y-6 animate-fade-in">
@@ -859,16 +899,30 @@ export default function ProjectDetail() {
       {/* Tab: Documents */}
       {activeTab === "documents" && (
         <div className="space-y-4">
-          {/* Upload zone */}
-          <div className="card">
+          {/* Drag & drop upload zone */}
+          <div
+            className={`card transition-colors ${dragOver ? "border-primary-400 bg-primary-50/50 dark:bg-primary-500/5" : ""}`}
+            onDragOver={(e) => { e.preventDefault(); setDragOver(true); }}
+            onDragLeave={() => setDragOver(false)}
+            onDrop={async (e) => {
+              e.preventDefault();
+              setDragOver(false);
+              const file = e.dataTransfer.files?.[0];
+              if (!file) return;
+              await handleUpload(file);
+            }}
+          >
             <div className="flex items-center justify-between mb-3">
               <h3 className="text-sm font-medium text-slate-700 dark:text-slate-300">
                 <FileText className="mr-1.5 inline h-4 w-4" />
-                Documents du projet
+                {t("documents.tabLabel")}
+                {documents && documents.length > 0 && (
+                  <span className="ml-1.5 text-xs text-slate-400">({documents.length})</span>
+                )}
               </h3>
               <label className="flex cursor-pointer items-center gap-2 rounded-lg bg-primary-500 px-3 py-1.5 text-xs font-medium text-white hover:bg-primary-600">
                 <Upload className="h-3.5 w-3.5" />
-                {uploading ? "Envoi..." : "Ajouter"}
+                {uploading ? t("documents.uploading") : t("documents.upload")}
                 <input
                   type="file"
                   className="hidden"
@@ -876,46 +930,50 @@ export default function ProjectDetail() {
                   onChange={async (e) => {
                     const file = e.target.files?.[0];
                     if (!file) return;
-                    setUploading(true);
-                    try {
-                      const formData = new FormData();
-                      formData.append("file", file);
-                      formData.append("projet_id", id || "");
-                      formData.append("category", "general");
-                      await api.post("/api/documents/upload", formData, {
-                        headers: { "Content-Type": "multipart/form-data" },
-                      });
-                      refetchDocs();
-                    } catch {
-                      // silently fail
-                    } finally {
-                      setUploading(false);
-                      e.target.value = "";
-                    }
+                    await handleUpload(file);
+                    e.target.value = "";
                   }}
                 />
               </label>
             </div>
 
+            {/* Upload progress */}
+            {uploading && (
+              <div className="mb-3 rounded-lg bg-primary-50 p-3 dark:bg-primary-500/10">
+                <div className="flex items-center gap-2 text-xs text-primary-600 dark:text-primary-400">
+                  <RefreshCw className="h-3 w-3 animate-spin" />
+                  {t("documents.uploading")}
+                </div>
+                <div className="mt-1.5 h-1.5 w-full rounded-full bg-primary-100 dark:bg-primary-500/20">
+                  <div className="h-full rounded-full bg-primary-500 animate-pulse" style={{ width: "60%" }} />
+                </div>
+              </div>
+            )}
+
             {!documents || documents.length === 0 ? (
-              <div className="flex flex-col items-center py-8 text-slate-400">
-                <File className="h-10 w-10" />
-                <p className="mt-2 text-sm">Aucun document</p>
+              <div className="flex flex-col items-center rounded-lg border-2 border-dashed border-slate-200 py-8 text-slate-400 dark:border-slate-600">
+                <Upload className="h-10 w-10" />
+                <p className="mt-2 text-sm">{t("documents.noDocuments")}</p>
+                <p className="mt-1 text-xs text-slate-300 dark:text-slate-500">
+                  {dragOver ? "Deposez le fichier ici" : "Glissez-deposez ou cliquez pour ajouter"}
+                </p>
               </div>
             ) : (
               <div className="divide-y divide-slate-100 dark:divide-slate-700">
-                {documents.map((doc) => (
+                {[...documents].sort((a, b) =>
+                  (b.uploaded_at || "").localeCompare(a.uploaded_at || "")
+                ).map((doc) => (
                   <div
                     key={doc.id}
                     className="flex items-center gap-3 py-2.5"
                   >
-                    <FileText className="h-5 w-5 shrink-0 text-slate-400" />
+                    {fileTypeIcon(doc.original_name)}
                     <div className="flex-1 min-w-0">
                       <p className="truncate text-sm font-medium text-slate-700 dark:text-slate-300">
                         {doc.original_name}
                       </p>
                       <p className="text-xs text-slate-400">
-                        {(doc.size_bytes / 1024).toFixed(0)} Ko
+                        {formatSize(doc.size_bytes)}
                         {doc.category !== "general" && ` · ${doc.category}`}
                         {doc.uploaded_at && ` · ${new Date(doc.uploaded_at).toLocaleDateString("fr-FR")}`}
                       </p>
@@ -923,7 +981,7 @@ export default function ProjectDetail() {
                     <a
                       href={`${api.defaults.baseURL}/api/documents/${doc.id}/download`}
                       className="flex h-7 w-7 items-center justify-center rounded-md text-slate-400 hover:bg-slate-100 hover:text-slate-600 dark:hover:bg-slate-700"
-                      title="Telecharger"
+                      title={t("documents.download")}
                     >
                       <Download className="h-3.5 w-3.5" />
                     </a>
@@ -933,7 +991,7 @@ export default function ProjectDetail() {
                         refetchDocs();
                       }}
                       className="flex h-7 w-7 items-center justify-center rounded-md text-slate-400 hover:bg-red-50 hover:text-red-500 dark:hover:bg-red-500/10"
-                      title="Supprimer"
+                      title={t("documents.deleteTitle")}
                     >
                       <Trash2 className="h-3.5 w-3.5" />
                     </button>
@@ -974,10 +1032,10 @@ export default function ProjectDetail() {
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
           <div className="w-full max-w-sm rounded-xl bg-white p-6 shadow-xl dark:bg-slate-800">
             <h3 className="text-lg font-semibold text-slate-900 dark:text-white">
-              Supprimer le projet ?
+              {t("deleteConfirm.title")}
             </h3>
             <p className="mt-2 text-sm text-slate-500 dark:text-slate-400">
-              Cette action est irreversible. Le projet "{projet.nom}" et toutes ses donnees associees seront supprimes.
+              {t("deleteConfirm.message")} "{projet.nom}"
             </p>
             <div className="mt-4 flex justify-end gap-3">
               <button

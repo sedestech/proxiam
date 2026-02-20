@@ -11,6 +11,7 @@ import {
   RefreshCw,
 } from "lucide-react";
 import api from "../lib/api";
+import QueryError from "../components/QueryError";
 
 interface ServiceStatus {
   status: string;
@@ -46,7 +47,7 @@ function StatusIcon({ status }: { status: string }) {
 export default function Admin() {
   const { t } = useTranslation();
 
-  const { data, isLoading, refetch, isFetching } = useQuery<HealthResponse>({
+  const { data, isLoading, isError, refetch, isFetching } = useQuery<HealthResponse>({
     queryKey: ["admin-health"],
     queryFn: async () => {
       const res = await api.get("/api/admin/health");
@@ -75,6 +76,10 @@ export default function Admin() {
           Refresh
         </button>
       </div>
+
+      {isError && (
+        <QueryError onRetry={() => refetch()} />
+      )}
 
       {/* Overall status */}
       {data && (

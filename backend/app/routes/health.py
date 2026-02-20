@@ -19,7 +19,7 @@ async def health_check(db: AsyncSession = Depends(get_db)):
     except Exception:
         db_status = "error"
 
-    return {"status": "ok", "database": db_status, "version": "1.0.0"}
+    return {"status": "ok", "database": db_status, "version": "1.1.0"}
 
 
 @router.get("/api/stats")

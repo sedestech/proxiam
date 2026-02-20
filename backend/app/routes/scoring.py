@@ -14,6 +14,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.database import get_db
 from app.models import Projet
 from app.services.scoring import calculate_score as compute_score, WEIGHTS, DEFAULT_WEIGHTS
+from app.routes.notifications import create_notification
 
 router = APIRouter()
 
@@ -65,6 +66,13 @@ async def calculate_score(projet_id: str, db: AsyncSession = Depends(get_db)):
         {"score": score_result["score"], "id": str(projet_id)},
     )
     await db.commit()
+
+    await create_notification(
+        db, type="score_calculated",
+        title=f"Score calcule : {score_result['score']}/100",
+        message=f"Projet {projet.nom}",
+        entity_type="projet", entity_id=str(projet_id),
+    )
 
     return score_result
 

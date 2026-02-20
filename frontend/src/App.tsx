@@ -2,6 +2,7 @@ import { lazy, Suspense } from "react";
 import { Routes, Route } from "react-router-dom";
 import Layout from "./components/layout/Layout";
 import LoadingFallback from "./components/LoadingFallback";
+import PageErrorBoundary from "./components/PageErrorBoundary";
 
 // Eager load: Dashboard (landing page)
 import Dashboard from "./pages/Dashboard";
@@ -18,24 +19,30 @@ const Admin = lazy(() => import("./pages/Admin"));
 const Veille = lazy(() => import("./pages/Veille"));
 const Settings = lazy(() => import("./pages/Settings"));
 
+function PageWrapper({ children }: { children: React.ReactNode }) {
+  return (
+    <PageErrorBoundary>
+      <Suspense fallback={<LoadingFallback />}>{children}</Suspense>
+    </PageErrorBoundary>
+  );
+}
+
 export default function App() {
   return (
-    <Suspense fallback={<LoadingFallback />}>
-      <Routes>
-        <Route element={<Layout />}>
-          <Route index element={<Dashboard />} />
-          <Route path="map" element={<Map />} />
-          <Route path="knowledge" element={<Knowledge />} />
-          <Route path="3d" element={<Viewer3D />} />
-          <Route path="canvas" element={<Canvas />} />
-          <Route path="projects" element={<Projects />} />
-          <Route path="projects/:id" element={<ProjectDetail />} />
-          <Route path="scoring" element={<Scoring />} />
-          <Route path="admin" element={<Admin />} />
-          <Route path="veille" element={<Veille />} />
-          <Route path="settings" element={<Settings />} />
-        </Route>
-      </Routes>
-    </Suspense>
+    <Routes>
+      <Route element={<Layout />}>
+        <Route index element={<Dashboard />} />
+        <Route path="map" element={<PageWrapper><Map /></PageWrapper>} />
+        <Route path="knowledge" element={<PageWrapper><Knowledge /></PageWrapper>} />
+        <Route path="3d" element={<PageWrapper><Viewer3D /></PageWrapper>} />
+        <Route path="canvas" element={<PageWrapper><Canvas /></PageWrapper>} />
+        <Route path="projects" element={<PageWrapper><Projects /></PageWrapper>} />
+        <Route path="projects/:id" element={<PageWrapper><ProjectDetail /></PageWrapper>} />
+        <Route path="scoring" element={<PageWrapper><Scoring /></PageWrapper>} />
+        <Route path="admin" element={<PageWrapper><Admin /></PageWrapper>} />
+        <Route path="veille" element={<PageWrapper><Veille /></PageWrapper>} />
+        <Route path="settings" element={<PageWrapper><Settings /></PageWrapper>} />
+      </Route>
+    </Routes>
   );
 }

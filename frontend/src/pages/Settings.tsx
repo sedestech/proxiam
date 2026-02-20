@@ -1,6 +1,8 @@
-import { Globe, Moon, Download, Upload, Key, CheckCircle, XCircle } from "lucide-react";
+import { useState } from "react";
+import { Globe, Moon, Download, Upload, Key, CheckCircle, XCircle, Database, RefreshCw, Search } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { useQuery } from "@tanstack/react-query";
+import { useNavigate } from "react-router-dom";
 import { useAppStore } from "../stores/appStore";
 import api from "../lib/api";
 
@@ -12,7 +14,10 @@ interface AIStatus {
 
 export default function Settings() {
   const { t, i18n } = useTranslation();
+  const navigate = useNavigate();
   const { theme, setTheme } = useAppStore();
+  const [reindexing, setReindexing] = useState(false);
+  const [reindexMsg, setReindexMsg] = useState("");
 
   const { data: aiStatus } = useQuery<AIStatus>({
     queryKey: ["ai-status"],
@@ -21,6 +26,15 @@ export default function Settings() {
       return res.data;
     },
     staleTime: 60 * 1000,
+  });
+
+  const { data: dbStats } = useQuery<Record<string, number>>({
+    queryKey: ["db-stats-settings"],
+    queryFn: async () => {
+      const res = await api.get("/api/stats");
+      return res.data;
+    },
+    staleTime: 30 * 1000,
   });
 
   return (
@@ -97,21 +111,78 @@ export default function Settings() {
         </div>
       </div>
 
+      {/* Database stats */}
+      <div className="card">
+        <div className="flex items-center gap-3 mb-3">
+          <Database className="h-5 w-5 text-slate-400" />
+          <h3 className="font-semibold text-slate-900 dark:text-white">Base de donnees</h3>
+        </div>
+        {dbStats && (
+          <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+            {Object.entries(dbStats).map(([key, count]) => (
+              <div key={key} className="rounded-lg bg-slate-50 px-3 py-2 dark:bg-slate-700">
+                <p className="text-lg font-bold text-slate-900 dark:text-white">{count}</p>
+                <p className="text-xs text-slate-500 dark:text-slate-400">{key}</p>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* Search reindex */}
+      <div className="card">
+        <div className="flex items-center gap-3">
+          <Search className="h-5 w-5 text-slate-400" />
+          <div className="flex-1">
+            <h3 className="font-semibold text-slate-900 dark:text-white">Meilisearch</h3>
+            <p className="text-sm text-slate-500 dark:text-slate-400">
+              {reindexMsg || "Moteur de recherche full-text"}
+            </p>
+          </div>
+          <button
+            disabled={reindexing}
+            onClick={async () => {
+              setReindexing(true);
+              setReindexMsg("Reindexation en cours...");
+              try {
+                const res = await api.post("/api/search/reindex");
+                setReindexMsg(`Reindexe : ${res.data.indexed || 0} documents`);
+              } catch {
+                setReindexMsg("Erreur de reindexation");
+              } finally {
+                setReindexing(false);
+              }
+            }}
+            className="flex items-center gap-2 rounded-lg border border-slate-200 px-3 py-1.5 text-sm font-medium text-slate-600 hover:bg-slate-50 disabled:opacity-50 dark:border-slate-600 dark:text-slate-300 dark:hover:bg-slate-700"
+          >
+            <RefreshCw className={`h-3.5 w-3.5 ${reindexing ? "animate-spin" : ""}`} />
+            Reindexer
+          </button>
+        </div>
+      </div>
+
       {/* Import/Export */}
       <div className="card space-y-3">
         <h3 className="flex items-center gap-2 font-semibold text-slate-900 dark:text-white">
           <Download className="h-5 w-5 text-slate-400" />
-          Import / Export en masse
+          Import / Export
         </h3>
         <div className="flex gap-3">
-          <button className="flex items-center gap-2 rounded-lg border border-slate-200 px-4 py-2 text-sm font-medium text-slate-600 hover:bg-slate-50 dark:border-slate-600 dark:text-slate-300 dark:hover:bg-slate-700">
+          <button
+            onClick={() => navigate("/projects")}
+            className="flex items-center gap-2 rounded-lg border border-slate-200 px-4 py-2 text-sm font-medium text-slate-600 hover:bg-slate-50 dark:border-slate-600 dark:text-slate-300 dark:hover:bg-slate-700"
+          >
             <Upload className="h-4 w-4" />
             Importer CSV/JSON
           </button>
-          <button className="flex items-center gap-2 rounded-lg border border-slate-200 px-4 py-2 text-sm font-medium text-slate-600 hover:bg-slate-50 dark:border-slate-600 dark:text-slate-300 dark:hover:bg-slate-700">
+          <a
+            href={`${api.defaults.baseURL || ""}/api/projets/export/csv`}
+            download
+            className="flex items-center gap-2 rounded-lg border border-slate-200 px-4 py-2 text-sm font-medium text-slate-600 hover:bg-slate-50 dark:border-slate-600 dark:text-slate-300 dark:hover:bg-slate-700"
+          >
             <Download className="h-4 w-4" />
-            Exporter tout
-          </button>
+            Exporter projets CSV
+          </a>
         </div>
       </div>
     </div>

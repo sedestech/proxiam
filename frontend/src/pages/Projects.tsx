@@ -14,6 +14,10 @@ import {
   BarChart3,
   Download,
   Plus,
+  Upload,
+  FileUp,
+  AlertCircle,
+  CheckCircle2,
 } from "lucide-react";
 import api from "../lib/api";
 import ProjectForm from "../components/ProjectForm";
@@ -87,6 +91,14 @@ export default function Projects() {
   const [filterFiliere, setFilterFiliere] = useState<string>("");
   const [filterStatut, setFilterStatut] = useState<string>("");
   const [showForm, setShowForm] = useState(false);
+  const [showImport, setShowImport] = useState(false);
+  const [importFile, setImportFile] = useState<File | null>(null);
+  const [importPreview, setImportPreview] = useState<Record<string, string>[]>([]);
+  const [importing, setImporting] = useState(false);
+  const [importResult, setImportResult] = useState<{
+    imported: number;
+    errors: { row: number; error: string }[];
+  } | null>(null);
 
   const { data: projets, isLoading } = useQuery<Projet[]>({
     queryKey: ["projets", filterFiliere, filterStatut],
@@ -122,6 +134,18 @@ export default function Projects() {
           </p>
         </div>
         <div className="flex items-center gap-2">
+          <button
+            onClick={() => {
+              setShowImport(true);
+              setImportFile(null);
+              setImportPreview([]);
+              setImportResult(null);
+            }}
+            className="flex items-center gap-2 rounded-lg border border-slate-200 px-3 py-2 text-sm font-medium text-slate-600 hover:bg-slate-50 dark:border-slate-600 dark:text-slate-300 dark:hover:bg-slate-700"
+          >
+            <Upload className="h-4 w-4" />
+            Import
+          </button>
           <a
             href={`${api.defaults.baseURL || ""}/api/projets/export/csv`}
             download
@@ -306,6 +330,156 @@ export default function Projects() {
       {projets && projets.length === 0 && (
         <div className="flex h-40 items-center justify-center rounded-xl border-2 border-dashed border-slate-200 bg-slate-100/50">
           <p className="text-sm text-slate-400">{t("common.noData")}</p>
+        </div>
+      )}
+
+      {/* Import modal */}
+      {showImport && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+          <div className="w-full max-w-2xl rounded-xl bg-white p-6 shadow-xl dark:bg-slate-800">
+            <h3 className="flex items-center gap-2 text-lg font-semibold text-slate-900 dark:text-white">
+              <FileUp className="h-5 w-5 text-primary-500" />
+              Importer des projets
+            </h3>
+            <p className="mt-1 text-sm text-slate-500">
+              CSV (delimiteur point-virgule) ou JSON. Colonnes : nom, filiere, puissance_mwc, surface_ha, commune, departement, region, statut, lon, lat
+            </p>
+
+            {!importResult ? (
+              <>
+                {/* File picker */}
+                <label className="mt-4 flex cursor-pointer flex-col items-center rounded-lg border-2 border-dashed border-slate-300 p-6 transition-colors hover:border-primary-400 dark:border-slate-600">
+                  <Upload className="h-8 w-8 text-slate-400" />
+                  <span className="mt-2 text-sm text-slate-500">
+                    {importFile ? importFile.name : "Choisir un fichier CSV ou JSON"}
+                  </span>
+                  <input
+                    type="file"
+                    accept=".csv,.json"
+                    className="hidden"
+                    onChange={(e) => {
+                      const f = e.target.files?.[0];
+                      if (!f) return;
+                      setImportFile(f);
+                      // Parse preview
+                      const reader = new FileReader();
+                      reader.onload = () => {
+                        const text = reader.result as string;
+                        if (f.name.endsWith(".json")) {
+                          try {
+                            const arr = JSON.parse(text);
+                            setImportPreview(arr.slice(0, 5));
+                          } catch { setImportPreview([]); }
+                        } else {
+                          const lines = text.split("\n").filter(Boolean);
+                          if (lines.length < 2) return;
+                          const headers = lines[0].split(";").map((h: string) => h.trim());
+                          const rows = lines.slice(1, 6).map((line: string) => {
+                            const vals = line.split(";");
+                            const obj: Record<string, string> = {};
+                            headers.forEach((h: string, i: number) => { obj[h] = vals[i]?.trim() || ""; });
+                            return obj;
+                          });
+                          setImportPreview(rows);
+                        }
+                      };
+                      reader.readAsText(f);
+                    }}
+                  />
+                </label>
+
+                {/* Preview table */}
+                {importPreview.length > 0 && (
+                  <div className="mt-4 max-h-48 overflow-auto rounded-lg border border-slate-200 dark:border-slate-700">
+                    <table className="w-full text-xs">
+                      <thead className="bg-slate-50 dark:bg-slate-700">
+                        <tr>
+                          {Object.keys(importPreview[0]).map((h) => (
+                            <th key={h} className="px-2 py-1.5 text-left font-medium text-slate-500">
+                              {h}
+                            </th>
+                          ))}
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {importPreview.map((row, i) => (
+                          <tr key={i} className="border-t border-slate-100 dark:border-slate-700">
+                            {Object.values(row).map((v, j) => (
+                              <td key={j} className="px-2 py-1 text-slate-600 dark:text-slate-300">
+                                {String(v)}
+                              </td>
+                            ))}
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+
+                <div className="mt-4 flex justify-end gap-3">
+                  <button
+                    onClick={() => setShowImport(false)}
+                    className="rounded-lg border border-slate-200 px-4 py-2 text-sm font-medium text-slate-600 hover:bg-slate-50 dark:border-slate-600 dark:text-slate-300"
+                  >
+                    Annuler
+                  </button>
+                  <button
+                    disabled={!importFile || importing}
+                    onClick={async () => {
+                      if (!importFile) return;
+                      setImporting(true);
+                      try {
+                        const formData = new FormData();
+                        formData.append("file", importFile);
+                        const res = await api.post("/api/projets/import", formData, {
+                          headers: { "Content-Type": "multipart/form-data" },
+                        });
+                        setImportResult(res.data);
+                        queryClient.invalidateQueries({ queryKey: ["projets"] });
+                        queryClient.invalidateQueries({ queryKey: ["projets-stats"] });
+                      } catch {
+                        setImportResult({ imported: 0, errors: [{ row: 0, error: "Erreur serveur" }] });
+                      } finally {
+                        setImporting(false);
+                      }
+                    }}
+                    className="flex items-center gap-2 rounded-lg bg-primary-500 px-4 py-2 text-sm font-medium text-white hover:bg-primary-600 disabled:opacity-50"
+                  >
+                    {importing ? "Import en cours..." : "Importer"}
+                  </button>
+                </div>
+              </>
+            ) : (
+              /* Result view */
+              <div className="mt-4 space-y-3">
+                <div className="flex items-center gap-2 rounded-lg bg-emerald-50 p-3 text-sm text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-400">
+                  <CheckCircle2 className="h-5 w-5" />
+                  {importResult.imported} projet(s) importe(s)
+                </div>
+                {importResult.errors.length > 0 && (
+                  <div className="rounded-lg bg-red-50 p-3 text-sm text-red-700 dark:bg-red-500/10 dark:text-red-400">
+                    <div className="flex items-center gap-2">
+                      <AlertCircle className="h-5 w-5" />
+                      {importResult.errors.length} erreur(s)
+                    </div>
+                    <ul className="mt-1 ml-7 list-disc text-xs">
+                      {importResult.errors.map((err, i) => (
+                        <li key={i}>Ligne {err.row}: {err.error}</li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+                <div className="flex justify-end">
+                  <button
+                    onClick={() => setShowImport(false)}
+                    className="rounded-lg bg-primary-500 px-4 py-2 text-sm font-medium text-white hover:bg-primary-600"
+                  >
+                    Fermer
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
         </div>
       )}
 

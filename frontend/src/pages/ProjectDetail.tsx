@@ -30,6 +30,10 @@ import {
   Sparkles,
   Pencil,
   Trash2,
+  Upload,
+  FileText,
+  Download,
+  File,
 } from "lucide-react";
 import api from "../lib/api";
 import ProjectForm from "../components/ProjectForm";
@@ -149,9 +153,11 @@ function cleanBlocTitle(titre: string): string {
 function WorkflowStep({
   bloc,
   isLast,
+  onUpdate,
 }: {
   bloc: PhaseBloc;
   isLast: boolean;
+  onUpdate?: (pct: number) => void;
 }) {
   const statusIcon =
     bloc.statut === "termine" ? (
@@ -201,13 +207,22 @@ function WorkflowStep({
             {bloc.completion_pct}%
           </span>
         </div>
-        {bloc.completion_pct > 0 && (
-          <div className="mt-1.5 h-1.5 w-full rounded-full bg-slate-100">
-            <div
-              className={`h-1.5 rounded-full ${progressColor} transition-all duration-500`}
-              style={{ width: `${bloc.completion_pct}%` }}
-            />
-          </div>
+        <div className="mt-1.5 h-1.5 w-full rounded-full bg-slate-100 dark:bg-slate-700">
+          <div
+            className={`h-1.5 rounded-full ${progressColor} transition-all duration-500`}
+            style={{ width: `${Math.max(bloc.completion_pct, 2)}%` }}
+          />
+        </div>
+        {onUpdate && (
+          <input
+            type="range"
+            min={0}
+            max={100}
+            step={5}
+            value={bloc.completion_pct}
+            onChange={(e) => onUpdate(Number(e.target.value))}
+            className="mt-1 h-1 w-full cursor-pointer appearance-none rounded-full accent-primary-500"
+          />
         )}
       </div>
     </div>
@@ -248,7 +263,18 @@ function ScoreGauge({ score }: { score: number }) {
   );
 }
 
-type TabKey = "overview" | "phases" | "score" | "ai";
+interface DocumentItem {
+  id: string;
+  filename: string;
+  original_name: string;
+  mimetype: string;
+  size_bytes: number;
+  category: string;
+  description: string | null;
+  uploaded_at: string | null;
+}
+
+type TabKey = "overview" | "phases" | "score" | "ai" | "documents";
 
 export default function ProjectDetail() {
   const { id } = useParams<{ id: string }>();
@@ -325,7 +351,19 @@ export default function ProjectDetail() {
     { key: "phases", label: t("projects.tabPhases") },
     { key: "score", label: t("projects.tabScore") },
     { key: "ai", label: t("ai.tabLabel") },
+    { key: "documents", label: "Documents" },
   ];
+
+  const { data: documents, refetch: refetchDocs } = useQuery<DocumentItem[]>({
+    queryKey: ["projet-documents", id],
+    queryFn: async () => {
+      const res = await api.get(`/api/documents?projet_id=${id}`);
+      return res.data.documents;
+    },
+    enabled: !!id && activeTab === "documents",
+  });
+
+  const [uploading, setUploading] = useState(false);
 
   return (
     <div className="space-y-6 animate-fade-in">
@@ -505,6 +543,14 @@ export default function ProjectDetail() {
                 key={bloc.code}
                 bloc={bloc}
                 isLast={i === phases.length - 1}
+                onUpdate={async (pct) => {
+                  try {
+                    await api.put(
+                      `/api/projets/${id}/phases/${bloc.code}?completion_pct=${pct}`
+                    );
+                    queryClient.invalidateQueries({ queryKey: ["projet-phases", id] });
+                  } catch { /* ignore */ }
+                }}
               />
             ))}
           </div>
@@ -807,6 +853,95 @@ export default function ProjectDetail() {
               )}
             </div>
           )}
+        </div>
+      )}
+
+      {/* Tab: Documents */}
+      {activeTab === "documents" && (
+        <div className="space-y-4">
+          {/* Upload zone */}
+          <div className="card">
+            <div className="flex items-center justify-between mb-3">
+              <h3 className="text-sm font-medium text-slate-700 dark:text-slate-300">
+                <FileText className="mr-1.5 inline h-4 w-4" />
+                Documents du projet
+              </h3>
+              <label className="flex cursor-pointer items-center gap-2 rounded-lg bg-primary-500 px-3 py-1.5 text-xs font-medium text-white hover:bg-primary-600">
+                <Upload className="h-3.5 w-3.5" />
+                {uploading ? "Envoi..." : "Ajouter"}
+                <input
+                  type="file"
+                  className="hidden"
+                  disabled={uploading}
+                  onChange={async (e) => {
+                    const file = e.target.files?.[0];
+                    if (!file) return;
+                    setUploading(true);
+                    try {
+                      const formData = new FormData();
+                      formData.append("file", file);
+                      formData.append("projet_id", id || "");
+                      formData.append("category", "general");
+                      await api.post("/api/documents/upload", formData, {
+                        headers: { "Content-Type": "multipart/form-data" },
+                      });
+                      refetchDocs();
+                    } catch {
+                      // silently fail
+                    } finally {
+                      setUploading(false);
+                      e.target.value = "";
+                    }
+                  }}
+                />
+              </label>
+            </div>
+
+            {!documents || documents.length === 0 ? (
+              <div className="flex flex-col items-center py-8 text-slate-400">
+                <File className="h-10 w-10" />
+                <p className="mt-2 text-sm">Aucun document</p>
+              </div>
+            ) : (
+              <div className="divide-y divide-slate-100 dark:divide-slate-700">
+                {documents.map((doc) => (
+                  <div
+                    key={doc.id}
+                    className="flex items-center gap-3 py-2.5"
+                  >
+                    <FileText className="h-5 w-5 shrink-0 text-slate-400" />
+                    <div className="flex-1 min-w-0">
+                      <p className="truncate text-sm font-medium text-slate-700 dark:text-slate-300">
+                        {doc.original_name}
+                      </p>
+                      <p className="text-xs text-slate-400">
+                        {(doc.size_bytes / 1024).toFixed(0)} Ko
+                        {doc.category !== "general" && ` · ${doc.category}`}
+                        {doc.uploaded_at && ` · ${new Date(doc.uploaded_at).toLocaleDateString("fr-FR")}`}
+                      </p>
+                    </div>
+                    <a
+                      href={`${api.defaults.baseURL}/api/documents/${doc.id}/download`}
+                      className="flex h-7 w-7 items-center justify-center rounded-md text-slate-400 hover:bg-slate-100 hover:text-slate-600 dark:hover:bg-slate-700"
+                      title="Telecharger"
+                    >
+                      <Download className="h-3.5 w-3.5" />
+                    </a>
+                    <button
+                      onClick={async () => {
+                        await api.delete(`/api/documents/${doc.id}`);
+                        refetchDocs();
+                      }}
+                      className="flex h-7 w-7 items-center justify-center rounded-md text-slate-400 hover:bg-red-50 hover:text-red-500 dark:hover:bg-red-500/10"
+                      title="Supprimer"
+                    >
+                      <Trash2 className="h-3.5 w-3.5" />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
         </div>
       )}
 

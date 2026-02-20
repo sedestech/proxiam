@@ -72,7 +72,7 @@ export default function Sidebar() {
       <div className="border-t border-slate-100 px-4 py-3 dark:border-slate-700">
         <div className="flex items-center gap-2 text-xs text-slate-400 dark:text-slate-500">
           <div className="h-1.5 w-1.5 rounded-full bg-emerald-400" />
-          <span>v0.9.0 — Sprint 8</span>
+          <span>v1.0.0 — Sprint 9</span>
         </div>
       </div>
     </aside>

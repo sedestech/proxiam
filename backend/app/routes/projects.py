@@ -8,7 +8,7 @@ import io
 import uuid
 from typing import Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 from sqlalchemy import select, text
@@ -325,6 +325,57 @@ async def update_projet(
     return await get_projet(projet_id, db)
 
 
+@router.put("/projets/{projet_id}/phases/{bloc_code}")
+async def update_phase_completion(
+    projet_id: str,
+    bloc_code: str,
+    completion_pct: int = Query(..., ge=0, le=100),
+    db: AsyncSession = Depends(get_db),
+):
+    """Update the completion percentage for a bloc (B1-B8) on a project.
+
+    Updates all phases in the given bloc for this project.
+    Creates projet_phases entries if they don't exist (upsert).
+    """
+    # Verify project exists
+    check = await db.execute(
+        text("SELECT id FROM projets WHERE id = :id"), {"id": projet_id}
+    )
+    if not check.first():
+        raise HTTPException(status_code=404, detail="Projet non trouve")
+
+    # Get phases for this bloc
+    phases_q = await db.execute(
+        text("""
+            SELECT p.id FROM phases p
+            JOIN blocs b ON p.bloc_id = b.id
+            WHERE b.code = :bloc_code
+        """),
+        {"bloc_code": bloc_code},
+    )
+    phase_ids = [r[0] for r in phases_q.fetchall()]
+    if not phase_ids:
+        raise HTTPException(status_code=404, detail=f"Bloc {bloc_code} not found")
+
+    # Pick the first phase as representative (same pattern as seed)
+    phase_id = phase_ids[0]
+    statut = "termine" if completion_pct >= 100 else "en_cours" if completion_pct > 0 else "a_faire"
+
+    # Upsert
+    await db.execute(
+        text("""
+            INSERT INTO projet_phases (projet_id, phase_id, completion_pct, statut)
+            VALUES (:projet_id, :phase_id, :pct, :statut)
+            ON CONFLICT (projet_id, phase_id) DO UPDATE
+            SET completion_pct = :pct, statut = :statut
+        """),
+        {"projet_id": projet_id, "phase_id": phase_id, "pct": completion_pct, "statut": statut},
+    )
+    await db.commit()
+
+    return {"bloc_code": bloc_code, "completion_pct": completion_pct, "statut": statut}
+
+
 @router.delete("/projets/{projet_id}")
 async def delete_projet(projet_id: str, db: AsyncSession = Depends(get_db)):
     """Delete a project and its associated data."""
@@ -351,3 +402,98 @@ async def delete_projet(projet_id: str, db: AsyncSession = Depends(get_db)):
     await db.commit()
 
     return {"status": "deleted", "id": projet_id}
+
+
+@router.post("/projets/import")
+async def import_projets(
+    file: UploadFile = File(...),
+    db: AsyncSession = Depends(get_db),
+):
+    """Import projects from CSV (semicolon-separated) or JSON file.
+
+    CSV columns: nom, filiere, puissance_mwc, surface_ha, commune, departement, region, statut, lon, lat
+    JSON: array of objects with the same fields.
+    """
+    data = await file.read()
+    content = data.decode("utf-8-sig")  # Handle BOM from Excel
+
+    filename = file.filename or ""
+    records = []
+
+    if filename.endswith(".json"):
+        import json
+        try:
+            parsed = json.loads(content)
+            if not isinstance(parsed, list):
+                raise HTTPException(status_code=400, detail="JSON must be an array")
+            records = parsed
+        except json.JSONDecodeError as e:
+            raise HTTPException(status_code=400, detail=f"Invalid JSON: {str(e)}")
+    else:
+        # CSV with semicolon delimiter (French Excel)
+        reader = csv.DictReader(io.StringIO(content), delimiter=";")
+        for row in reader:
+            records.append({k.strip(): v.strip() for k, v in row.items() if k})
+
+    if not records:
+        raise HTTPException(status_code=400, detail="No records found in file")
+
+    if len(records) > 500:
+        raise HTTPException(status_code=400, detail="Too many records (max 500)")
+
+    created = []
+    errors = []
+
+    for i, rec in enumerate(records):
+        nom = rec.get("nom", "").strip()
+        if not nom:
+            errors.append({"row": i + 1, "error": "nom is required"})
+            continue
+
+        filiere = rec.get("filiere") or None
+        statut = rec.get("statut", "prospection") or "prospection"
+        commune = rec.get("commune") or None
+        departement = rec.get("departement") or None
+        region = rec.get("region") or None
+
+        try:
+            puissance = float(rec["puissance_mwc"]) if rec.get("puissance_mwc") else None
+        except (ValueError, TypeError):
+            puissance = None
+
+        try:
+            surface = float(rec["surface_ha"]) if rec.get("surface_ha") else None
+        except (ValueError, TypeError):
+            surface = None
+
+        try:
+            lon = float(rec["lon"]) if rec.get("lon") else None
+            lat = float(rec["lat"]) if rec.get("lat") else None
+        except (ValueError, TypeError):
+            lon, lat = None, None
+
+        geom_sql = "ST_SetSRID(ST_MakePoint(:lon, :lat), 4326)" if lon and lat else "NULL"
+        new_id = str(uuid.uuid4())
+
+        await db.execute(
+            text(f"""
+                INSERT INTO projets (id, nom, filiere, puissance_mwc, surface_ha, commune, departement, region, statut, geom)
+                VALUES (:id, :nom, :filiere, :puissance, :surface, :commune, :departement, :region, :statut, {geom_sql})
+            """),
+            {
+                "id": new_id, "nom": nom, "filiere": filiere,
+                "puissance": puissance, "surface": surface,
+                "commune": commune, "departement": departement,
+                "region": region, "statut": statut,
+                "lon": lon, "lat": lat,
+            },
+        )
+        created.append({"id": new_id, "nom": nom})
+
+    await db.commit()
+
+    return {
+        "imported": len(created),
+        "errors": errors,
+        "projects": created,
+    }

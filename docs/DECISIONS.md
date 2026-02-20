@@ -1,5 +1,49 @@
 # Décisions Techniques — Proxiam
 
+## 2026-02-20 : MinIO pour le stockage documents (pas de filesystem local)
+
+**Quoi** : Les documents uploades sont stockes dans MinIO (S3-compatible), pas sur le filesystem local du serveur.
+
+**Pourquoi** : MinIO est deja configure dans docker-compose.yml. Le stockage S3 est decouple du serveur applicatif : les fichiers survivent a un redeploy, le bucket est versionnable, et la migration vers AWS S3 est triviale (meme SDK). Le filesystem local ne scale pas en multi-instance.
+
+**Alternatives rejetees** :
+- Filesystem local : pas de scalabilite, perdu au redeploy Docker
+- PostgreSQL bytea : degrade les performances de la BDD, pas adapte aux fichiers > 1 Mo
+- AWS S3 direct : necessite un compte AWS, surdimensionne pour le dev local
+
+**Impact** : Le conteneur MinIO consomme ~50 Mo RAM. Le SDK minio Python gere le bucket, upload, download, delete.
+
+---
+
+## 2026-02-20 : Import CSV point-virgule (pas de detection automatique)
+
+**Quoi** : L'import de projets utilise le point-virgule comme delimiteur CSV par defaut, sans detection automatique du delimiteur.
+
+**Pourquoi** : Coherent avec l'export CSV (Sprint 6) qui utilise le point-virgule. Le public cible est francais et utilise Excel FR ou le point-virgule est le delimiteur par defaut. La detection automatique (sniffing) est fragile et source de bugs.
+
+**Alternatives rejetees** :
+- Virgule par defaut : incompatible avec Excel FR
+- Detection automatique (csv.Sniffer) : peu fiable sur des fichiers courts
+- Format XLSX : necessite openpyxl, surdimensionne
+
+**Impact** : Les fichiers JSON sont aussi supportes. Le backend gere le BOM UTF-8 d'Excel avec `decode("utf-8-sig")`.
+
+---
+
+## 2026-02-20 : Upsert pour la mise a jour des phases (pas de CRUD complet)
+
+**Quoi** : L'endpoint PUT phases utilise `ON CONFLICT DO UPDATE` (upsert) plutot qu'un INSERT + UPDATE separes.
+
+**Pourquoi** : Les phases peuvent ne pas avoir d'entree dans `projet_phases` (progression = 0 implicite). Le upsert cree l'entree si elle n'existe pas et la met a jour sinon, en une seule requete SQL. Pas besoin de verifier l'existence avant.
+
+**Alternatives rejetees** :
+- Check + INSERT/UPDATE : 2 requetes SQL au lieu d'une
+- DELETE + INSERT : perte des colonnes supplementaires (notes, metadata)
+
+**Impact** : Le slider frontend envoie directement le pourcentage, le backend gere tout.
+
+---
+
 ## 2026-02-20 : React Flow pour le Workflow Canvas (pas de timeline custom)
 
 **Quoi** : Page `/canvas` utilisant React Flow pour visualiser le pipeline B1→B8 avec des custom nodes, plutot qu'une timeline ou un kanban custom.

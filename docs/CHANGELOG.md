@@ -1,5 +1,39 @@
 # Changelog — Proxiam OS ENR
 
+## [1.0.0] — 2026-02-20 — Sprint 9 : Documents, Import, Settings & Phase Management
+
+### Ajoute
+- **Gestion documents** : upload MinIO S3, stockage metadata PostgreSQL
+  - `POST /api/documents/upload` — upload multipart (max 50 Mo)
+  - `GET /api/documents` — liste avec filtres projet/categorie
+  - `GET /api/documents/{id}/download` — telechargement avec Content-Disposition
+  - `DELETE /api/documents/{id}` — suppression MinIO + PostgreSQL
+  - Onglet "Documents" dans la page Detail Projet : upload, liste, download, suppression
+  - Table `documents` avec FK `projet_id`, index, categories
+- **Import projets** : CSV (point-virgule) et JSON
+  - `POST /api/projets/import` — import bulk (max 500 lignes)
+  - Modal import dans la page Projets : picker fichier, preview tableau, validation, resultat
+  - Support BOM UTF-8 (Excel), colonnes mappees automatiquement
+  - Affichage erreurs par ligne (nom manquant, etc.)
+- **Settings fonctionnel** : page parametres entierement connectee
+  - Statistiques BDD en temps reel (compteurs par table)
+  - Reindexation Meilisearch depuis l'interface (`POST /api/search/reindex`)
+  - Boutons Import/Export connectes aux vrais endpoints
+  - Liens directs vers la page Projets pour l'import
+- **Phases editables** : modification du pourcentage de completion
+  - `PUT /api/projets/{id}/phases/{bloc_code}?completion_pct=N` — upsert avec statut auto
+  - Slider range (pas de 5%) sur chaque bloc dans l'onglet Phases
+  - Statut auto-calcule : 0% = a_faire, 1-99% = en_cours, 100% = termine
+
+### Infrastructure
+- MinIO S3 demarre (port 9000/9001), bucket `proxiam-docs`
+- Table `documents` creee avec index sur projet_id
+- Sidebar version mise a jour : v1.0.0 — Sprint 9
+- Totaux tests : 98 backend + 174 frontend = 272 tests
+- Backend version dans /health : 1.0.0
+
+---
+
 ## [0.9.0] — 2026-02-20 — Sprint 8 : Workflow Canvas, Notifications & Performance
 
 ### Ajoute

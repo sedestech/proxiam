@@ -1,8 +1,10 @@
 from typing import Optional
 import logging
 
-from fastapi import APIRouter, Query
+from fastapi import APIRouter, Depends, Query
+from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.database import get_db
 from app.services.search import search as meili_search
 
 logger = logging.getLogger(__name__)
@@ -42,3 +44,16 @@ async def search_global(
         }
 
     return result
+
+
+@router.post("/search/reindex")
+async def reindex_search(db: AsyncSession = Depends(get_db)):
+    """Trigger a full reindex of Meilisearch from PostgreSQL data."""
+    try:
+        from app.services.search import index_all_entities
+        counts = await index_all_entities(db)
+        total = sum(counts.values())
+        return {"status": "ok", "indexed": total, "counts": counts}
+    except Exception as exc:
+        logger.error("Reindex failed: %s", exc)
+        return {"status": "error", "error": str(exc), "indexed": 0}

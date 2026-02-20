@@ -5,7 +5,7 @@ import MobileNav from "./MobileNav";
 
 export default function Layout() {
   return (
-    <div className="flex h-screen overflow-hidden bg-slate-50">
+    <div className="flex h-screen overflow-hidden bg-slate-50 dark:bg-slate-900">
       {/* Desktop sidebar */}
       <div className="hidden md:block">
         <Sidebar />

@@ -9,7 +9,7 @@ from slowapi.util import get_remote_address
 from app.config import settings
 from app.database import engine, Base
 from app.middleware import SecurityHeadersMiddleware
-from app.routes import knowledge, projects, geo, scoring, search, health
+from app.routes import knowledge, projects, geo, scoring, search, health, graph, ai, notifications
 
 
 @asynccontextmanager
@@ -56,3 +56,6 @@ app.include_router(projects.router, prefix="/api", tags=["projects"])
 app.include_router(geo.router, prefix="/api", tags=["geo"])
 app.include_router(scoring.router, prefix="/api", tags=["scoring"])
 app.include_router(search.router, prefix="/api", tags=["search"])
+app.include_router(graph.router, prefix="/api", tags=["graph"])
+app.include_router(ai.router, prefix="/api", tags=["ai"])
+app.include_router(notifications.router, prefix="/api", tags=["notifications"])

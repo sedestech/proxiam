@@ -48,6 +48,31 @@ Tables : `projets` (géolocalisés), `projet_phases`, `projet_risques`, `projet_
 
 Table : `postes_sources` (4847 postes RTE/Enedis avec géométrie POINT 4326)
 
+## Sprint 1 — Knowledge Engine (implémenté)
+
+### Backend
+- `app/routes/graph.py` : `GET /api/knowledge/graph` — retourne nodes + edges + stats pour React Flow
+- `app/services/search.py` : Service async Meilisearch (indexation + recherche multi-index)
+- `app/seed/index_search.py` : Script d'indexation PostgreSQL → Meilisearch (5167 docs, 7 index)
+- `app/seed/import_data.py` : Import seed avec création de 13 290 relations dans les junction tables
+
+### Frontend
+- `src/pages/Knowledge.tsx` : Page Knowledge Graph avec sidebar B1-B8, toggles d'entités, canvas React Flow, panneau de détail
+- `src/components/graph/BlocNode.tsx` : Noeud custom pour les blocs (indigo, icône Boxes)
+- `src/components/graph/EntityNode.tsx` : Noeud compact pour 6 types d'entités (icônes et couleurs distinctes)
+- `src/hooks/useKnowledgeGraph.ts` : Hook React Query + layout hiérarchique 3 niveaux
+
+### Relations Matrice 6D (13 290 total)
+```
+PhaseNorme:      2 826 relations (3 phases/norme via bloc mapping)
+PhaseRisque:     2 433 relations
+PhaseLivrable:   2 925 relations
+PhaseOutil:      1 000 relations (round-robin sur blocs)
+PhaseCompetence:   600 relations
+RisqueNorme:     1 348 relations (co-occurrence par phase_code)
+NormeLivrable:   2 158 relations
+```
+
 ## Sécurité
 
 - **Headers OWASP** : X-Content-Type-Options, X-Frame-Options, HSTS, Referrer-Policy, Permissions-Policy

@@ -37,7 +37,7 @@ services:
 
   # ─── Meilisearch ───
   meilisearch:
-    image: getmeili/meilisearch:v1.6
+    image: getmeili/meilisearch:v1.12
     container_name: proxiam-search
     restart: unless-stopped
     ports:

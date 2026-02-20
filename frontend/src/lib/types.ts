@@ -171,3 +171,67 @@ export const NODE_COLORS: Record<string, string> = {
   person: "#ec4899",
   repository: "#64748b",
 };
+
+// Entity type colors for the Knowledge Graph visualization
+export const ENTITY_COLORS: Record<string, string> = {
+  bloc: "#6366f1",      // indigo — blocs
+  phase: "#3b82f6",     // blue — phases
+  norme: "#10b981",     // emerald — normes / reglementation
+  risque: "#ef4444",    // red — risques
+  livrable: "#f59e0b",  // amber — livrables
+  outil: "#f97316",     // orange — outils
+  competence: "#ec4899", // pink — competences
+};
+
+// Bloc metadata for sidebar display
+export const BLOC_INFO: Record<string, { label: string; description: string }> = {
+  B1: { label: "B1 - Prospection & Terrain", description: "Identification et analyse des sites" },
+  B2: { label: "B2 - Ingenierie & Etudes", description: "Etudes techniques et dimensionnement" },
+  B3: { label: "B3 - Reglementaire", description: "Autorisations et conformite" },
+  B4: { label: "B4 - Finance & Business", description: "Financement et modeles economiques" },
+  B5: { label: "B5 - Construction", description: "Realisation et chantier" },
+  B6: { label: "B6 - Exploitation", description: "O&M et performance" },
+  B7: { label: "B7 - Environnement", description: "Impact et biodiversite" },
+  B8: { label: "B8 - Transverse", description: "Gestion de projet et qualite" },
+};
+
+// Knowledge Graph API response types
+export interface GraphNode {
+  id: string;
+  type: string;
+  data: {
+    label: string;
+    code: string;
+    count?: number;
+    bloc_code?: string;
+    severite?: number;
+    categorie?: string;
+    organisme?: string;
+    perimetre?: string;
+    type_livrable?: string;
+    obligatoire?: boolean;
+    licence?: string;
+    editeur?: string;
+    pole?: string;
+    niveau_requis?: number;
+    [key: string]: unknown;
+  };
+}
+
+export interface GraphEdge {
+  id: string;
+  source: string;
+  target: string;
+  type: string;
+  data?: Record<string, unknown>;
+}
+
+export interface GraphResponse {
+  nodes: GraphNode[];
+  edges: GraphEdge[];
+  stats: {
+    total_nodes: number;
+    total_edges: number;
+  };
+  error?: string;
+}

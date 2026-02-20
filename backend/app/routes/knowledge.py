@@ -1,3 +1,5 @@
+from typing import Optional
+
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy import select, func
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -12,8 +14,8 @@ router = APIRouter()
 
 @router.get("/phases")
 async def list_phases(
-    bloc: str | None = Query(None, description="Filter by bloc code (e.g. B1)"),
-    filiere: str | None = Query(None, description="Filter by filière (solaire, eolien, bess, h2)"),
+    bloc: Optional[str] = Query(None, description="Filter by bloc code (e.g. B1)"),
+    filiere: Optional[str] = Query(None, description="Filter by filière (solaire, eolien, bess, h2)"),
     limit: int = Query(100, le=500),
     offset: int = Query(0, ge=0),
     db: AsyncSession = Depends(get_db),
@@ -94,9 +96,9 @@ async def list_blocs(db: AsyncSession = Depends(get_db)):
 
 @router.get("/normes")
 async def list_normes(
-    phase: str | None = Query(None, description="Filter by phase code (e.g. P0)"),
-    organisme: str | None = None,
-    perimetre: str | None = None,
+    phase: Optional[str] = Query(None, description="Filter by phase code (e.g. P0)"),
+    organisme: Optional[str] = None,
+    perimetre: Optional[str] = None,
     limit: int = Query(100, le=500),
     offset: int = Query(0, ge=0),
     db: AsyncSession = Depends(get_db),
@@ -124,8 +126,8 @@ async def get_norme(norme_id: int, db: AsyncSession = Depends(get_db)):
 
 @router.get("/risques")
 async def list_risques(
-    categorie: str | None = None,
-    severite_min: int | None = None,
+    categorie: Optional[str] = None,
+    severite_min: Optional[int] = None,
     limit: int = Query(100, le=500),
     offset: int = Query(0, ge=0),
     db: AsyncSession = Depends(get_db),
@@ -162,7 +164,7 @@ async def risque_outils(risque_id: int, db: AsyncSession = Depends(get_db)):
 
 @router.get("/outils")
 async def list_outils(
-    licence: str | None = None,
+    licence: Optional[str] = None,
     limit: int = Query(100, le=500),
     offset: int = Query(0, ge=0),
     db: AsyncSession = Depends(get_db),
@@ -185,7 +187,7 @@ async def get_outil(outil_id: int, db: AsyncSession = Depends(get_db)):
 
 @router.get("/sources")
 async def list_sources(
-    type: str | None = None,
+    type: Optional[str] = None,
     limit: int = Query(100, le=500),
     offset: int = Query(0, ge=0),
     db: AsyncSession = Depends(get_db),
@@ -202,7 +204,7 @@ async def list_sources(
 
 @router.get("/competences")
 async def list_competences(
-    pole: str | None = None,
+    pole: Optional[str] = None,
     limit: int = Query(100, le=500),
     offset: int = Query(0, ge=0),
     db: AsyncSession = Depends(get_db),

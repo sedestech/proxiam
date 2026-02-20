@@ -137,6 +137,19 @@ export default function Dashboard() {
     },
   });
 
+  const { data: analytics } = useQuery<{
+    score_distribution: { bucket: string; count: number }[];
+    filiere_performance: { filiere: string; count: number; avg_score: number; avg_mwc: number }[];
+    recent_activity: { type: string; title: string; timestamp: string | null }[];
+  }>({
+    queryKey: ["analytics"],
+    queryFn: async () => {
+      const res = await api.get("/api/projets/stats/analytics");
+      return res.data;
+    },
+    staleTime: 60 * 1000,
+  });
+
   const totalKnowledge = stats
     ? stats.phases + stats.livrables + stats.normes + stats.risques +
       stats.sources_veille + stats.outils + stats.competences
@@ -380,6 +393,84 @@ export default function Dashboard() {
                 </span>
               </div>
             ))}
+          </div>
+        </div>
+      </div>
+
+      {/* Analytics: Score distribution + Activity */}
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+        {/* Score distribution */}
+        <div className="card">
+          <h2 className="mb-3 text-sm font-medium text-slate-500 dark:text-slate-400">
+            Distribution des scores
+          </h2>
+          {analytics?.score_distribution && analytics.score_distribution.length > 0 ? (
+            <ResponsiveContainer width="100%" height={160}>
+              <BarChart data={analytics.score_distribution} margin={{ left: 0, right: 10, top: 5, bottom: 5 }}>
+                <XAxis
+                  dataKey="bucket"
+                  tick={{ fill: "#64748b", fontSize: 10 }}
+                  axisLine={false}
+                  tickLine={false}
+                />
+                <YAxis hide />
+                <Tooltip
+                  contentStyle={{
+                    background: "#fff", border: "1px solid #e2e8f0",
+                    borderRadius: "8px", fontSize: "12px",
+                  }}
+                />
+                <Bar dataKey="count" radius={[4, 4, 0, 0]}>
+                  {analytics.score_distribution.map((entry, i) => (
+                    <Cell
+                      key={i}
+                      fill={
+                        entry.bucket === "unscored" ? "#cbd5e1" :
+                        entry.bucket === "80-100" ? "#10b981" :
+                        entry.bucket === "60-79" ? "#3b82f6" :
+                        entry.bucket === "40-59" ? "#f59e0b" :
+                        "#ef4444"
+                      }
+                    />
+                  ))}
+                </Bar>
+              </BarChart>
+            </ResponsiveContainer>
+          ) : (
+            <div className="flex h-[160px] items-center justify-center text-xs text-slate-400">
+              Pas de donnees
+            </div>
+          )}
+        </div>
+
+        {/* Recent activity */}
+        <div className="card">
+          <h2 className="mb-3 text-sm font-medium text-slate-500 dark:text-slate-400">
+            {t("dashboard.recentActivity")}
+          </h2>
+          <div className="space-y-2 max-h-[160px] overflow-y-auto">
+            {analytics?.recent_activity?.map((a, i) => (
+              <div key={i} className="flex items-start gap-2.5">
+                <div className={`mt-1.5 h-2 w-2 shrink-0 rounded-full ${
+                  a.type === "project_created" ? "bg-emerald-400" :
+                  a.type === "project_deleted" ? "bg-red-400" :
+                  a.type === "score_calculated" ? "bg-blue-400" :
+                  a.type === "import_completed" ? "bg-violet-400" :
+                  "bg-slate-300"
+                }`} />
+                <div className="flex-1 min-w-0">
+                  <p className="truncate text-xs text-slate-600 dark:text-slate-300">{a.title}</p>
+                  {a.timestamp && (
+                    <p className="text-[10px] text-slate-400">
+                      {new Date(a.timestamp).toLocaleString("fr-FR", { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" })}
+                    </p>
+                  )}
+                </div>
+              </div>
+            ))}
+            {(!analytics?.recent_activity || analytics.recent_activity.length === 0) && (
+              <p className="py-4 text-center text-xs text-slate-400">Pas d'activite</p>
+            )}
           </div>
         </div>
       </div>

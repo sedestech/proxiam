@@ -18,6 +18,7 @@ const Scoring = lazy(() => import("./pages/Scoring"));
 const Admin = lazy(() => import("./pages/Admin"));
 const Veille = lazy(() => import("./pages/Veille"));
 const Settings = lazy(() => import("./pages/Settings"));
+const SearchResults = lazy(() => import("./pages/SearchResults"));
 
 function PageWrapper({ children }: { children: React.ReactNode }) {
   return (
@@ -41,6 +42,7 @@ export default function App() {
         <Route path="scoring" element={<PageWrapper><Scoring /></PageWrapper>} />
         <Route path="admin" element={<PageWrapper><Admin /></PageWrapper>} />
         <Route path="veille" element={<PageWrapper><Veille /></PageWrapper>} />
+        <Route path="search" element={<PageWrapper><SearchResults /></PageWrapper>} />
         <Route path="settings" element={<PageWrapper><Settings /></PageWrapper>} />
       </Route>
     </Routes>

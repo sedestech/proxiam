@@ -1,5 +1,31 @@
 # Changelog — Proxiam OS ENR
 
+## [1.2.0] — 2026-02-20 — Sprint 11 : Search, Filters, Analytics, Mobile
+
+### Ajoute
+- **Page recherche complete** (`/search`) : resultats pleine page avec facettes
+  - Filtrage par type d'entite (7 facettes cliquables)
+  - URL-persisted query params (`?q=...&types=...`)
+  - Resultats avec description, code, icone typee
+  - Lien "Voir tous les resultats" depuis la SearchBar
+- **Dashboard analytics** : score distribution + activite recente
+  - `GET /api/projets/stats/analytics` — distribution scores, performance filiere, activite
+  - Graphique barres score distribution (5 buckets colores)
+  - Feed activite recente avec pastilles couleur par type
+- **Filtres projets avances** avec persistence URL
+  - Recherche par nom/commune/departement (client-side)
+  - Tri par nom, score, MWc (cycle avec bouton)
+  - Dropdowns filiere/statut persistes dans l'URL (`?filiere=...&statut=...`)
+  - Dark mode sur les filtres
+- **Projects page mobile** : cards layout en dessous de md breakpoint
+  - Header responsive avec labels caches sur mobile
+
+### Tests
+- 322 tests (118 backend + 204 frontend)
+- Nouveaux : facet toggle (4), project filter (5), project sort (4)
+
+---
+
 ## [1.1.0] — 2026-02-20 — Sprint 10 : i18n, Notifications DB, Error Boundaries, UX Documents
 
 ### Ajoute

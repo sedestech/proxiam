@@ -1,5 +1,21 @@
 # Décisions Techniques — Proxiam
 
+## 2026-02-20 : Filtres projets persistes dans l'URL (pas useState)
+
+**Quoi** : Les filtres (filiere, statut, recherche, tri) de la page Projets utilisent `useSearchParams` au lieu de `useState`, rendant l'etat visible dans l'URL.
+
+**Pourquoi** : Permet le partage de liens filtres, le retour arriere navigateur qui restaure les filtres, et le bookmarking. Le tri par nom/score/MWc alterne via un bouton cycle au lieu de 3 boutons separés.
+
+**Alternatives rejetees** :
+- `useState` simple : pas de persistance URL, perte a la navigation
+- Redux/Zustand : overhead inutile pour un etat local de page
+
+## 2026-02-20 : Page recherche dediee (pas dropdown seulement)
+
+**Quoi** : Ajout d'une page `/search` complete avec facettes par type d'entite, en complement du dropdown SearchBar existant.
+
+**Pourquoi** : Le dropdown (8 resultats max) est trop limite pour explorer la base 6D (5167 docs). La page dediee permet le filtrage facette, la pagination, et l'affichage des descriptions completes.
+
 ## 2026-02-20 : Notifications persistantes dans PostgreSQL (pas en memoire)
 
 **Quoi** : Les notifications sont stockees dans une table PostgreSQL `notifications` avec generation automatique sur chaque action CRUD/scoring/import.

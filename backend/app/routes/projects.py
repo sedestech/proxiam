@@ -197,6 +197,66 @@ async def projets_stats(db: AsyncSession = Depends(get_db)):
     }
 
 
+@router.get("/projets/stats/analytics")
+async def projets_analytics(db: AsyncSession = Depends(get_db)):
+    """Return analytics data: score distribution, filiere performance, phase stats."""
+    # Score distribution (10-point buckets: 0-9, 10-19, ..., 90-100)
+    score_query = text("""
+        SELECT
+            CASE
+                WHEN score_global IS NULL THEN 'unscored'
+                WHEN score_global < 20 THEN '0-19'
+                WHEN score_global < 40 THEN '20-39'
+                WHEN score_global < 60 THEN '40-59'
+                WHEN score_global < 80 THEN '60-79'
+                ELSE '80-100'
+            END as bucket,
+            COUNT(*) as count
+        FROM projets
+        GROUP BY bucket
+        ORDER BY bucket
+    """)
+    score_result = await db.execute(score_query)
+    score_dist = [dict(r) for r in score_result.mappings().all()]
+
+    # Filiere performance (avg score + count + avg power)
+    filiere_query = text("""
+        SELECT
+            COALESCE(filiere, 'autre') as filiere,
+            COUNT(*) as count,
+            COALESCE(AVG(score_global), 0) as avg_score,
+            COALESCE(AVG(puissance_mwc), 0) as avg_mwc
+        FROM projets
+        GROUP BY filiere
+        ORDER BY count DESC
+    """)
+    filiere_result = await db.execute(filiere_query)
+    filiere_perf = [
+        {**dict(r), "avg_score": round(float(r["avg_score"])), "avg_mwc": round(float(r["avg_mwc"]), 1)}
+        for r in filiere_result.mappings().all()
+    ]
+
+    # Recent activity (last 10 notifications)
+    activity_query = text("""
+        SELECT type, title, created_at
+        FROM notifications
+        ORDER BY created_at DESC
+        LIMIT 10
+    """)
+    activity_result = await db.execute(activity_query)
+    activity = [
+        {"type": r["type"], "title": r["title"],
+         "timestamp": r["created_at"].isoformat() if r["created_at"] else None}
+        for r in activity_result.mappings().all()
+    ]
+
+    return {
+        "score_distribution": score_dist,
+        "filiere_performance": filiere_perf,
+        "recent_activity": activity,
+    }
+
+
 @router.get("/projets/export/csv")
 async def export_projets_csv(db: AsyncSession = Depends(get_db)):
     """Export all projects as CSV file."""

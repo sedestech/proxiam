@@ -1,5 +1,5 @@
-import { useState } from "react";
-import { Link } from "react-router-dom";
+import { useState, useMemo } from "react";
+import { Link, useSearchParams } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
@@ -18,6 +18,8 @@ import {
   FileUp,
   AlertCircle,
   CheckCircle2,
+  ArrowUpDown,
+  Search,
 } from "lucide-react";
 import api from "../lib/api";
 import ProjectForm from "../components/ProjectForm";
@@ -89,8 +91,23 @@ function statutBadge(statut: string) {
 export default function Projects() {
   const { t } = useTranslation();
   const queryClient = useQueryClient();
-  const [filterFiliere, setFilterFiliere] = useState<string>("");
-  const [filterStatut, setFilterStatut] = useState<string>("");
+  const [searchParams, setSearchParams] = useSearchParams();
+
+  const filterFiliere = searchParams.get("filiere") || "";
+  const filterStatut = searchParams.get("statut") || "";
+  const filterSearch = searchParams.get("q") || "";
+  const sortBy = searchParams.get("sort") || "nom";
+  const sortDir = searchParams.get("dir") || "asc";
+
+  function setFilter(key: string, value: string) {
+    const params = new URLSearchParams(searchParams);
+    if (value) {
+      params.set(key, value);
+    } else {
+      params.delete(key);
+    }
+    setSearchParams(params, { replace: true });
+  }
   const [showForm, setShowForm] = useState(false);
   const [showImport, setShowImport] = useState(false);
   const [importFile, setImportFile] = useState<File | null>(null);
@@ -113,6 +130,28 @@ export default function Projects() {
     staleTime: 5 * 60 * 1000,
   });
 
+  // Client-side name search + sort (API handles filiere/statut)
+  const filteredProjets = useMemo(() => {
+    if (!projets) return [];
+    let list = projets;
+    if (filterSearch) {
+      const q = filterSearch.toLowerCase();
+      list = list.filter(
+        (p) =>
+          p.nom.toLowerCase().includes(q) ||
+          p.commune?.toLowerCase().includes(q) ||
+          p.departement?.toLowerCase().includes(q)
+      );
+    }
+    list = [...list].sort((a, b) => {
+      if (sortBy === "score") return (b.score_global ?? -1) - (a.score_global ?? -1);
+      if (sortBy === "mwc") return (b.puissance_mwc ?? 0) - (a.puissance_mwc ?? 0);
+      return a.nom.localeCompare(b.nom);
+    });
+    if (sortDir === "desc" && sortBy === "nom") list.reverse();
+    return list;
+  }, [projets, filterSearch, sortBy, sortDir]);
+
   const { data: stats } = useQuery<PortfolioStats>({
     queryKey: ["projets-stats"],
     queryFn: async () => {
@@ -125,7 +164,7 @@ export default function Projects() {
   return (
     <div className="space-y-6 animate-fade-in">
       {/* Header */}
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h1 className="text-2xl font-bold tracking-tight text-slate-900 dark:text-white">
             {t("nav.projects")}
@@ -145,7 +184,7 @@ export default function Projects() {
             className="flex items-center gap-2 rounded-lg border border-slate-200 px-3 py-2 text-sm font-medium text-slate-600 hover:bg-slate-50 dark:border-slate-600 dark:text-slate-300 dark:hover:bg-slate-700"
           >
             <Upload className="h-4 w-4" />
-            Import
+            <span className="hidden sm:inline">Import</span>
           </button>
           <a
             href={`${api.defaults.baseURL || ""}/api/projets/export/csv`}
@@ -153,14 +192,14 @@ export default function Projects() {
             className="flex items-center gap-2 rounded-lg border border-slate-200 px-3 py-2 text-sm font-medium text-slate-600 hover:bg-slate-50 dark:border-slate-600 dark:text-slate-300 dark:hover:bg-slate-700"
           >
             <Download className="h-4 w-4" />
-            CSV
+            <span className="hidden sm:inline">CSV</span>
           </a>
           <button
             onClick={() => setShowForm(true)}
             className="flex items-center gap-2 rounded-lg bg-primary-500 px-3 py-2 text-sm font-medium text-white hover:bg-primary-600"
           >
             <Plus className="h-4 w-4" />
-            {t("common.create")}
+            <span className="hidden sm:inline">{t("common.create")}</span>
           </button>
         </div>
       </div>
@@ -206,11 +245,21 @@ export default function Projects() {
       )}
 
       {/* Filters */}
-      <div className="flex flex-wrap gap-2">
+      <div className="flex flex-wrap items-center gap-2">
+        <div className="relative">
+          <Search className="absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-slate-400" />
+          <input
+            type="text"
+            value={filterSearch}
+            onChange={(e) => setFilter("q", e.target.value)}
+            placeholder={t("common.search")}
+            className="h-8 w-48 rounded-lg border border-slate-200 bg-white pl-8 pr-3 text-sm text-slate-700 outline-none focus:border-primary-300 focus:ring-1 focus:ring-primary-100 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-200"
+          />
+        </div>
         <select
           value={filterFiliere}
-          onChange={(e) => setFilterFiliere(e.target.value)}
-          className="rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-sm text-slate-700"
+          onChange={(e) => setFilter("filiere", e.target.value)}
+          className="h-8 rounded-lg border border-slate-200 bg-white px-3 text-sm text-slate-700 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-200"
         >
           <option value="">{t("projects.allFilieres")}</option>
           <option value="solaire_sol">Solaire sol</option>
@@ -219,8 +268,8 @@ export default function Projects() {
         </select>
         <select
           value={filterStatut}
-          onChange={(e) => setFilterStatut(e.target.value)}
-          className="rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-sm text-slate-700"
+          onChange={(e) => setFilter("statut", e.target.value)}
+          className="h-8 rounded-lg border border-slate-200 bg-white px-3 text-sm text-slate-700 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-200"
         >
           <option value="">{t("projects.allStatuts")}</option>
           <option value="prospection">Prospection</option>
@@ -229,6 +278,18 @@ export default function Projects() {
           <option value="construction">Construction</option>
           <option value="exploitation">Exploitation</option>
         </select>
+        <button
+          onClick={() => {
+            const next = sortBy === "nom" ? "score" : sortBy === "score" ? "mwc" : "nom";
+            setFilter("sort", next);
+          }}
+          className="flex h-8 items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 text-sm text-slate-600 hover:bg-slate-50 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-300 dark:hover:bg-slate-700"
+        >
+          <ArrowUpDown className="h-3.5 w-3.5" />
+          <span className="hidden sm:inline">
+            {sortBy === "nom" ? t("projects.project") : sortBy === "score" ? t("common.score") : "MWc"}
+          </span>
+        </button>
       </div>
 
       {/* Loading */}
@@ -243,19 +304,63 @@ export default function Projects() {
         <QueryError onRetry={() => refetch()} />
       )}
 
-      {/* Projects table */}
-      {projets && projets.length > 0 && (
-        <div className="overflow-hidden rounded-xl border border-slate-200 bg-white">
+      {/* Projects — mobile cards */}
+      {filteredProjets.length > 0 && (
+        <div className="space-y-3 md:hidden">
+          {filteredProjets.map((p) => (
+            <Link
+              key={p.id}
+              to={`/projects/${p.id}`}
+              className="block rounded-xl border border-slate-200 bg-white p-4 transition-colors hover:border-primary-300 dark:border-slate-700 dark:bg-slate-800"
+            >
+              <div className="flex items-start gap-3">
+                {filiereIcon(p.filiere)}
+                <div className="flex-1 min-w-0">
+                  <p className="font-medium text-slate-900 dark:text-white truncate">{p.nom}</p>
+                  {p.commune && (
+                    <p className="mt-0.5 flex items-center gap-1 text-xs text-slate-400">
+                      <MapPin className="h-3 w-3" />
+                      {p.commune}{p.departement && ` (${p.departement})`}
+                    </p>
+                  )}
+                </div>
+                <div className="flex flex-col items-end gap-1.5">
+                  {p.score_global !== null ? (
+                    <span
+                      className="inline-flex h-7 w-7 items-center justify-center rounded-full text-xs font-bold text-white"
+                      style={{ backgroundColor: scoreColor(p.score_global) }}
+                    >
+                      {p.score_global}
+                    </span>
+                  ) : (
+                    <span className="text-xs text-slate-300">—</span>
+                  )}
+                  {statutBadge(p.statut)}
+                </div>
+              </div>
+              {p.puissance_mwc && (
+                <div className="mt-2 flex items-center gap-3 text-xs text-slate-500">
+                  <span className="font-mono">{p.puissance_mwc} MWc</span>
+                </div>
+              )}
+            </Link>
+          ))}
+        </div>
+      )}
+
+      {/* Projects — desktop table */}
+      {filteredProjets.length > 0 && (
+        <div className="hidden md:block overflow-hidden rounded-xl border border-slate-200 bg-white dark:border-slate-700 dark:bg-slate-800">
           <table className="w-full">
             <thead>
-              <tr className="border-b border-slate-100 bg-slate-50/50">
+              <tr className="border-b border-slate-100 bg-slate-50/50 dark:border-slate-700 dark:bg-slate-800/50">
                 <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-slate-500">
                   {t("projects.project")}
                 </th>
-                <th className="hidden px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-slate-500 sm:table-cell">
+                <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-slate-500">
                   {t("projects.location")}
                 </th>
-                <th className="hidden px-4 py-3 text-center text-xs font-medium uppercase tracking-wider text-slate-500 md:table-cell">
+                <th className="hidden px-4 py-3 text-center text-xs font-medium uppercase tracking-wider text-slate-500 lg:table-cell">
                   MWc
                 </th>
                 <th className="px-4 py-3 text-center text-xs font-medium uppercase tracking-wider text-slate-500">
@@ -267,11 +372,11 @@ export default function Projects() {
                 <th className="w-8" />
               </tr>
             </thead>
-            <tbody className="divide-y divide-slate-100">
-              {projets.map((p) => (
+            <tbody className="divide-y divide-slate-100 dark:divide-slate-700">
+              {filteredProjets.map((p) => (
                 <tr
                   key={p.id}
-                  className="group hover:bg-slate-50 transition-colors"
+                  className="group hover:bg-slate-50 dark:hover:bg-slate-700/50 transition-colors"
                 >
                   <td className="px-4 py-3">
                     <Link
@@ -279,29 +384,22 @@ export default function Projects() {
                       className="flex items-center gap-3"
                     >
                       {filiereIcon(p.filiere)}
-                      <div>
-                        <p className="font-medium text-slate-900 group-hover:text-primary-600">
-                          {p.nom}
-                        </p>
-                        <p className="text-xs text-slate-400 sm:hidden">
-                          {p.commune}
-                        </p>
-                      </div>
+                      <p className="font-medium text-slate-900 dark:text-white group-hover:text-primary-600">
+                        {p.nom}
+                      </p>
                     </Link>
                   </td>
-                  <td className="hidden px-4 py-3 sm:table-cell">
-                    <div className="flex items-center gap-1.5 text-sm text-slate-600">
+                  <td className="px-4 py-3">
+                    <div className="flex items-center gap-1.5 text-sm text-slate-600 dark:text-slate-400">
                       <MapPin className="h-3.5 w-3.5 text-slate-400" />
                       {p.commune}
                       {p.departement && (
-                        <span className="text-slate-400">
-                          ({p.departement})
-                        </span>
+                        <span className="text-slate-400">({p.departement})</span>
                       )}
                     </div>
                   </td>
-                  <td className="hidden px-4 py-3 text-center md:table-cell">
-                    <span className="font-mono text-sm text-slate-700">
+                  <td className="hidden px-4 py-3 text-center lg:table-cell">
+                    <span className="font-mono text-sm text-slate-700 dark:text-slate-300">
                       {p.puissance_mwc ?? "—"}
                     </span>
                   </td>
@@ -333,7 +431,7 @@ export default function Projects() {
       )}
 
       {/* Empty state */}
-      {projets && projets.length === 0 && (
+      {!isLoading && filteredProjets.length === 0 && (
         <div className="flex h-40 items-center justify-center rounded-xl border-2 border-dashed border-slate-200 bg-slate-100/50">
           <p className="text-sm text-slate-400">{t("common.noData")}</p>
         </div>

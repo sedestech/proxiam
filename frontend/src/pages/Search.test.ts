@@ -1,10 +1,12 @@
 /**
- * Unit tests for SearchBar pure logic — Sprint 7.
+ * Unit tests for SearchBar + SearchResults pure logic — Sprint 7 + 11.
  *
  * Tests:
  * - TYPE_META configuration
  * - Search result filtering
  * - Keyboard navigation logic
+ * - Facet toggle logic
+ * - Project name search & sort
  *
  * Run with:
  *   cd frontend && npx vitest run src/pages/Search.test.ts
@@ -154,5 +156,118 @@ describe("Search response structure", () => {
   it("has facets with type counts", () => {
     expect(mockResponse.facets.type).toHaveProperty("phase");
     expect(mockResponse.facets.type.phase).toBe(5);
+  });
+});
+
+// ─── Sprint 11: Facet toggle logic ───
+
+function toggleType(activeTypes: string[], type: string): string[] {
+  return activeTypes.includes(type)
+    ? activeTypes.filter((t) => t !== type)
+    : [...activeTypes, type];
+}
+
+describe("facet toggle", () => {
+  it("adds a type when not active", () => {
+    expect(toggleType([], "phase")).toEqual(["phase"]);
+  });
+
+  it("removes a type when already active", () => {
+    expect(toggleType(["phase", "norme"], "phase")).toEqual(["norme"]);
+  });
+
+  it("can add multiple types", () => {
+    const result = toggleType(toggleType([], "phase"), "norme");
+    expect(result).toEqual(["phase", "norme"]);
+  });
+
+  it("empty after removing last type", () => {
+    expect(toggleType(["phase"], "phase")).toEqual([]);
+  });
+});
+
+// ─── Sprint 11: Project filter + sort logic ───
+
+interface Projet {
+  id: string;
+  nom: string;
+  commune: string | null;
+  departement: string | null;
+  score_global: number | null;
+  puissance_mwc: number | null;
+}
+
+function filterProjets(projets: Projet[], query: string): Projet[] {
+  if (!query) return projets;
+  const q = query.toLowerCase();
+  return projets.filter(
+    (p) =>
+      p.nom.toLowerCase().includes(q) ||
+      p.commune?.toLowerCase().includes(q) ||
+      p.departement?.toLowerCase().includes(q)
+  );
+}
+
+function sortProjets(projets: Projet[], sortBy: string): Projet[] {
+  return [...projets].sort((a, b) => {
+    if (sortBy === "score") return (b.score_global ?? -1) - (a.score_global ?? -1);
+    if (sortBy === "mwc") return (b.puissance_mwc ?? 0) - (a.puissance_mwc ?? 0);
+    return a.nom.localeCompare(b.nom);
+  });
+}
+
+describe("project name filter", () => {
+  const projets: Projet[] = [
+    { id: "1", nom: "Solaire Provence", commune: "Aix", departement: "13", score_global: 80, puissance_mwc: 10 },
+    { id: "2", nom: "Eolien Bretagne", commune: "Brest", departement: "29", score_global: 65, puissance_mwc: 30 },
+    { id: "3", nom: "BESS Normandie", commune: "Rouen", departement: "76", score_global: null, puissance_mwc: 50 },
+  ];
+
+  it("filters by nom", () => {
+    expect(filterProjets(projets, "solaire")).toHaveLength(1);
+  });
+
+  it("filters by commune", () => {
+    expect(filterProjets(projets, "brest")).toHaveLength(1);
+  });
+
+  it("filters by departement", () => {
+    expect(filterProjets(projets, "76")).toHaveLength(1);
+  });
+
+  it("returns all on empty query", () => {
+    expect(filterProjets(projets, "")).toHaveLength(3);
+  });
+
+  it("is case insensitive", () => {
+    expect(filterProjets(projets, "BESS")).toHaveLength(1);
+  });
+});
+
+describe("project sort", () => {
+  const projets: Projet[] = [
+    { id: "1", nom: "Bravo", commune: null, departement: null, score_global: 60, puissance_mwc: 10 },
+    { id: "2", nom: "Alpha", commune: null, departement: null, score_global: 90, puissance_mwc: 50 },
+    { id: "3", nom: "Charlie", commune: null, departement: null, score_global: null, puissance_mwc: 30 },
+  ];
+
+  it("sorts by nom alphabetically", () => {
+    const sorted = sortProjets(projets, "nom");
+    expect(sorted.map((p) => p.nom)).toEqual(["Alpha", "Bravo", "Charlie"]);
+  });
+
+  it("sorts by score descending", () => {
+    const sorted = sortProjets(projets, "score");
+    expect(sorted.map((p) => p.nom)).toEqual(["Alpha", "Bravo", "Charlie"]);
+  });
+
+  it("sorts by MWc descending", () => {
+    const sorted = sortProjets(projets, "mwc");
+    expect(sorted.map((p) => p.nom)).toEqual(["Alpha", "Charlie", "Bravo"]);
+  });
+
+  it("null scores sort to end", () => {
+    const sorted = sortProjets(projets, "score");
+    expect(sorted[sorted.length - 1].score_global).toBeNull();
   });
 });

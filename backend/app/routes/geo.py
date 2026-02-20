@@ -1,4 +1,8 @@
+from typing import Optional
+import json
+
 from fastapi import APIRouter, Depends, Query
+from fastapi.responses import JSONResponse
 from sqlalchemy import select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -8,9 +12,33 @@ from app.models import PosteSource
 router = APIRouter()
 
 
+def _build_feature(row: dict) -> dict:
+    """Build a GeoJSON Feature from a row containing geojson + property columns."""
+    geometry = json.loads(row["geojson"])
+    properties = {
+        "id": row["id"],
+        "nom": row["nom"],
+        "gestionnaire": row["gestionnaire"],
+        "tension_kv": float(row["tension_kv"]) if row["tension_kv"] is not None else None,
+        "puissance_mw": float(row["puissance_mw"]) if row["puissance_mw"] is not None else None,
+        "capacite_disponible_mw": (
+            float(row["capacite_disponible_mw"])
+            if row["capacite_disponible_mw"] is not None
+            else None
+        ),
+    }
+    return {"type": "Feature", "geometry": geometry, "properties": properties}
+
+
+def _build_feature_collection(rows) -> dict:
+    """Build a GeoJSON FeatureCollection from database rows."""
+    features = [_build_feature(dict(r)) for r in rows]
+    return {"type": "FeatureCollection", "features": features}
+
+
 @router.get("/postes-sources")
 async def list_postes(
-    gestionnaire: str | None = None,
+    gestionnaire: Optional[str] = None,
     limit: int = Query(100, le=1000),
     offset: int = Query(0, ge=0),
     db: AsyncSession = Depends(get_db),
@@ -23,15 +51,95 @@ async def list_postes(
     return result.scalars().all()
 
 
+@router.get("/postes-sources/geojson")
+async def postes_geojson(
+    gestionnaire: Optional[str] = None,
+    tension_min: Optional[float] = None,
+    capacite_min: Optional[float] = None,
+    db: AsyncSession = Depends(get_db),
+):
+    """Return ALL postes sources as a GeoJSON FeatureCollection for MapLibre GL.
+
+    Uses PostGIS ST_AsGeoJSON() for server-side geometry serialization (faster
+    than Python-side conversion).
+
+    Filters:
+        gestionnaire: Filter by grid operator (e.g. 'RTE', 'Enedis', 'ELD').
+        tension_min:  Minimum tension in kV.
+        capacite_min: Minimum available capacity in MW.
+    """
+    # Build query dynamically with optional filters
+    conditions: list[str] = ["geom IS NOT NULL"]
+    params: dict = {}
+
+    if gestionnaire:
+        conditions.append("gestionnaire = :gestionnaire")
+        params["gestionnaire"] = gestionnaire
+
+    if tension_min is not None:
+        conditions.append("tension_kv >= :tension_min")
+        params["tension_min"] = tension_min
+
+    if capacite_min is not None:
+        conditions.append("capacite_disponible_mw >= :capacite_min")
+        params["capacite_min"] = capacite_min
+
+    where_clause = " AND ".join(conditions)
+
+    query = text(f"""
+        SELECT id, nom, gestionnaire, tension_kv, puissance_mw,
+               capacite_disponible_mw,
+               ST_AsGeoJSON(geom) as geojson
+        FROM postes_sources
+        WHERE {where_clause}
+    """)
+    result = await db.execute(query, params)
+    rows = result.mappings().all()
+
+    feature_collection = _build_feature_collection(rows)
+
+    return JSONResponse(
+        content=feature_collection,
+        media_type="application/geo+json",
+    )
+
+
 @router.get("/postes-sources/bbox")
 async def postes_in_bbox(
     west: float = Query(...),
     south: float = Query(...),
     east: float = Query(...),
     north: float = Query(...),
+    format: Optional[str] = Query(None, description="Response format: 'geojson' for GeoJSON FeatureCollection, omit for JSON list"),
     db: AsyncSession = Depends(get_db),
 ):
-    """Return postes sources within a bounding box."""
+    """Return postes sources within a bounding box.
+
+    By default returns a flat JSON list. Pass `format=geojson` to get a GeoJSON
+    FeatureCollection suitable for direct use in MapLibre GL.
+    """
+    if format == "geojson":
+        query = text("""
+            SELECT id, nom, gestionnaire, tension_kv, puissance_mw,
+                   capacite_disponible_mw,
+                   ST_AsGeoJSON(geom) as geojson
+            FROM postes_sources
+            WHERE geom && ST_MakeEnvelope(:west, :south, :east, :north, 4326)
+            LIMIT 500
+        """)
+        result = await db.execute(
+            query, {"west": west, "south": south, "east": east, "north": north}
+        )
+        rows = result.mappings().all()
+
+        feature_collection = _build_feature_collection(rows)
+
+        return JSONResponse(
+            content=feature_collection,
+            media_type="application/geo+json",
+        )
+
+    # Default: flat JSON list (original behavior)
     query = text("""
         SELECT id, nom, gestionnaire, tension_kv, puissance_mw,
                capacite_disponible_mw,

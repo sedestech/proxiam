@@ -62,6 +62,7 @@ PYTHONPATH=. python3 -m app.seed.import_data
 | `npm run test` (frontend/) | Tests Vitest |
 | `pytest` (backend/) | Tests pytest |
 | `npm run lint` (frontend/) | ESLint |
+| `python -m app.seed.index_search` (backend/) | Indexer dans Meilisearch |
 
 ## Stack
 
@@ -75,7 +76,7 @@ PYTHONPATH=. python3 -m app.seed.import_data
 | Backend | Python 3.12, FastAPI, SQLAlchemy 2.0, GeoAlchemy2 |
 | BDD | PostgreSQL 16 + PostGIS 3.4 |
 | Cache | Redis 7 |
-| Search | Meilisearch |
+| Search | Meilisearch v1.12 |
 | Storage | MinIO (S3) |
 | Auth | Clerk (Sprint 6) |
 | AI | Anthropic Claude API |
@@ -100,7 +101,8 @@ PYTHONPATH=. python3 -m app.seed.import_data
 | `GET /api/postes-sources/bbox` | Postes sources par bounding box |
 | `GET /api/postes-sources/nearest` | Postes sources les plus proches |
 | `POST /api/projets/{id}/score` | Calcul du score 0-100 |
-| `GET /api/search?q=` | Recherche globale (Meilisearch) |
+| `GET /api/knowledge/graph` | Knowledge Graph (nodes+edges pour React Flow) |
+| `GET /api/search?q=` | Recherche globale (Meilisearch, 5167 docs, 7 index) |
 | Swagger | `GET /api/docs` |
 
 ## Data Model — Matrice 6D
@@ -153,7 +155,7 @@ cd frontend && npm run test:coverage    # Couverture
 ## Roadmap
 
 - **Sprint 0** : Fondations (structure, Docker, schema, seed) ✓
-- **Sprint 1** : Knowledge Engine (CRUD 6D, React Flow, Meilisearch)
+- **Sprint 1** : Knowledge Engine (Graph API, React Flow, Meilisearch) ✓
 - **Sprint 2** : Cartographie (MapLibre GL, MVT tiles, postes sources)
 - **Sprint 3** : Site Scoring (algorithme 0-100, radar chart)
 - **Sprint 4** : Gestion Projets (workflow P0→P7, timeline, portfolio)

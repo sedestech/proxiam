@@ -1,5 +1,227 @@
 # Décisions Techniques — Proxiam
 
+## 2026-02-20 : React Flow pour le Workflow Canvas (pas de timeline custom)
+
+**Quoi** : Page `/canvas` utilisant React Flow pour visualiser le pipeline B1→B8 avec des custom nodes, plutot qu'une timeline ou un kanban custom.
+
+**Pourquoi** : React Flow est deja installe et utilise pour le Knowledge Graph. Les custom BlocNode avec Handle permettent de representer les connexions entre blocs (edges animees pour en_cours, vertes pour termine). Le MiniMap et les Controls sont integres gratuitement.
+
+**Alternatives rejetees** :
+- Timeline verticale custom : pas de connexions visuelles entre les etapes
+- Kanban (react-beautiful-dnd) : paradigme drag-and-drop, pas adapte a un workflow fixe
+- D3 force-directed : surdimensionne, deja rejete pour le Knowledge Graph
+
+**Impact** : Aucun package supplementaire. La page reutilise React Flow avec un layout horizontal (position x = index * 260).
+
+---
+
+## 2026-02-20 : Notifications generees depuis l'activite BDD (pas de table dediee)
+
+**Quoi** : Endpoint `/api/notifications` qui genere des evenements a la volee depuis les donnees projets existantes, sans creer une table `notifications` en base.
+
+**Pourquoi** : Evite une migration de schema (pas de table a creer, pas de triggers). Les evenements sont derives des donnees existantes : `date_creation` pour les projets crees, `score_global IS NOT NULL` pour les scores calcules, compteurs pour les stats systeme. Suffisant pour le MVP.
+
+**Alternatives rejetees** :
+- Table `notifications` avec triggers PostgreSQL : plus propre long terme mais migration lourde
+- Event sourcing (Redis Streams) : surdimensionne pour le nombre de projets actuel
+- WebSocket temps reel : complexite serveur, pas necessaire a ce stade
+
+**Impact** : La notification systeme est toujours inseree en premier (avant le tri par timestamp) pour garantir sa visibilite. Le frontend auto-refresh toutes les 60s.
+
+---
+
+## 2026-02-20 : Lazy loading route-level avec React.lazy (pas de micro-frontends)
+
+**Quoi** : Code splitting par page avec `React.lazy()` + `Suspense`. Seul Dashboard est charge immediatement, les 10 autres pages sont chargees a la demande.
+
+**Pourquoi** : Le bundle inclut des dependances lourdes (Three.js ~600KB, React Flow ~200KB, MapLibre ~500KB). Le lazy loading evite de charger Three.js quand l'utilisateur ne visite pas `/3d`. `React.lazy()` est natif React, pas de dependance supplementaire.
+
+**Alternatives rejetees** :
+- Tout eager : bundle initial > 2MB, temps de chargement penalisant
+- Micro-frontends (Module Federation) : complexite d'infra, surdimensionne
+- Route-based splitting avec react-loadable : package desuet, React.lazy suffit
+
+**Impact** : Le bundle initial est plus leger. Un `LoadingFallback` s'affiche pendant le chargement. Un `ErrorBoundary` capture les erreurs de chargement.
+
+---
+
+## 2026-02-20 : React Three Fiber pour la vue 3D (pas de Deck.gl)
+
+**Quoi** : Vue 3D du portefeuille avec React Three Fiber + @react-three/drei, sans Deck.gl.
+
+**Pourquoi** : R3F s'integre nativement avec React (composants JSX pour les meshes). Deck.gl est optimise pour les layers geospatiaux (heatmaps, arcs) mais surdimensionne pour une vue portfolio. R3F + drei (OrbitControls, Text, RoundedBox, Grid) suffit pour des barres 3D interactives.
+
+**Alternatives rejetees** :
+- Deck.gl seul : API non-React, pas d'objets 3D custom (seulement des layers de donnees)
+- Three.js pur : API imperative, pas d'integration React
+- R3F + Deck.gl ensemble : complexite d'integration, surdimensionne pour le cas d'usage
+
+**Impact** : 3 packages npm ajoutes (three, @react-three/fiber, @react-three/drei). La page 3D est autonome et n'interfere pas avec MapLibre.
+
+---
+
+## 2026-02-20 : CRUD projets avec SQL brut (pas d'ORM write)
+
+**Quoi** : Les operations CRUD utilisent `text()` SQL brut pour les INSERT/UPDATE/DELETE, pas l'ORM SQLAlchemy.
+
+**Pourquoi** : Les colonnes Geometry (PostGIS) necessitent `ST_SetSRID(ST_MakePoint())` pour l'insertion, ce que l'ORM ne gere pas directement. Le pattern SQL brut est deja utilise pour les lectures (Sprint 3). Rester coherent plutot que mixer ORM write + SQL read.
+
+**Alternatives rejetees** :
+- ORM write + `func.ST_SetSRID()` : fonctionnel mais verbeux et moins lisible
+- Pydantic response_model avec GeoAlchemy : ideal long terme mais refactoring trop lourd maintenant
+- Pas de CRUD : l'app resterait en read-only
+
+**Impact** : Les endpoints sont simples et predictibles. Le dynamic SET clause dans PUT gere les mises a jour partielles.
+
+---
+
+## 2026-02-20 : Dark mode avec Tailwind class strategy + Zustand
+
+**Quoi** : Theme sombre/clair/systeme utilisant `darkMode: "class"` de Tailwind, gere par Zustand avec persistance localStorage.
+
+**Pourquoi** : La strategie `class` permet un controle total (3 modes : light, dark, system) contrairement a `media` qui ne supporte que system. Zustand centralise l'etat du theme et applique la classe `dark` sur `<html>`. localStorage garantit la persistance entre sessions.
+
+**Alternatives rejetees** :
+- `darkMode: "media"` : pas de toggle manuel, uniquement system
+- CSS custom properties only : plus de code, pas d'integration Tailwind
+- Context API pour le theme : re-renders inutiles vs Zustand selective
+
+**Impact** : Classes `dark:` ajoutees sur tous les composants. Le theme est applique immediatement au chargement (pas de flash).
+
+---
+
+## 2026-02-20 : Export CSV avec delimiteur point-virgule
+
+**Quoi** : Endpoint `GET /api/projets/export/csv` utilisant le point-virgule comme delimiteur CSV.
+
+**Pourquoi** : En France, Excel utilise le point-virgule comme delimiteur par defaut (la virgule est le separateur decimal). Un CSV avec virgules s'ouvre mal dans Excel FR. Le point-virgule garantit une ouverture correcte sans manipulation.
+
+**Alternatives rejetees** :
+- Virgule (standard international) : casse l'ouverture dans Excel FR
+- Export XLSX natif : necessite une dependance supplementaire (openpyxl), surdimensionne
+- JSON export : pas adapte aux utilisateurs non-techniques
+
+**Impact** : Le fichier s'ouvre directement dans Excel FR avec les colonnes separees.
+
+---
+
+## 2026-02-20 : Health check multi-services avec latence
+
+**Quoi** : Endpoint `/api/admin/health` qui teste PostgreSQL, Redis, Meilisearch et AI en parallele avec mesure de latence.
+
+**Pourquoi** : Un seul endpoint pour verifier l'etat complet de l'infrastructure. La latence par service permet d'identifier les goulots d'etranglement. Le statut global (ok/degraded) donne une vue synthetique.
+
+**Alternatives rejetees** :
+- Un endpoint par service : trop de requetes cote client
+- Monitoring externe (Uptime Kuma) : ne donne pas les details internes (taille BDD, compteurs)
+- Pas de health check : impossible de diagnostiquer en production
+
+**Impact** : La page Admin affiche les services avec auto-refresh 30s. Le format est extensible pour ajouter de nouveaux services.
+
+---
+
+## 2026-02-20 : AI service avec fallback template par filiere
+
+**Quoi** : Service d'analyse IA qui utilise Claude API quand disponible, sinon un moteur de templates par filiere.
+
+**Pourquoi** : La cle API Anthropic n'est pas toujours configuree (dev local, CI). Le fallback template fournit des recommandations utiles basees sur les donnees de la matrice 6D (forces, risques, prochaines etapes par filiere). L'experience utilisateur reste coherente quel que soit le mode.
+
+**Alternatives rejetees** :
+- Forcer la cle API : bloque le dev et les tests sans cle
+- Pas de fallback (erreur 503) : mauvaise UX, pas de valeur ajoutee
+- Mock LLM (reponses aleatoires) : moins utile que des templates metier
+
+**Impact** : Le champ `source` dans la reponse indique "claude" ou "template". Le frontend affiche un badge mode.
+
+---
+
+## 2026-02-20 : Enrichissement sources par patterns de noms
+
+**Quoi** : Classification automatique des 578 sources de veille (type + frequence) par matching de patterns sur les noms.
+
+**Pourquoi** : Les sources importees depuis les brainstorms n'avaient pas de type ni de frequence. Un classement manuel de 578 sources est trop chronophage. Le matching par mots-cles (API, RSS, .gouv.fr, etc.) et noms connus (RTE, ADEME, etc.) donne une classification correcte a 90%.
+
+**Alternatives rejetees** :
+- Classification manuelle : 578 sources, trop long
+- LLM pour classifier : couteux pour un one-shot, surdimensionne
+- Pas de classification : page Veille inutilisable sans filtres
+
+**Impact** : 63 API, 58 base_donnees, 13 RSS, 444 scraping. Frequences variees.
+
+---
+
+## 2026-02-20 : Workflow par blocs B1-B8 (et non phases P0-P7)
+
+**Quoi** : Le workflow projet utilise les 8 blocs (B1-B8) comme etapes macro, et non les phases P0-P7 comme prevu initialement.
+
+**Pourquoi** : Les donnees parsees des brainstorms contiennent 1061 phases fines (P1.1 a P8.80) groupees en 8 blocs. Il n'y a pas de phases macro P0-P7. Les blocs correspondent aux etapes du cycle de vie ENR et fournissent un workflow coherent.
+
+**Alternatives rejetees** :
+- Creer des phases P0-P7 artificielles : duplication de donnees, perte de lien avec la matrice 6D
+- Utiliser les phases fines dans le workflow : trop granulaire (1061 etapes), illisible
+
+**Impact** : La table `projet_phases` utilise une phase representative par bloc. L'API retourne les blocs B1-B8 avec un statut agrege (termine/en_cours/a_faire).
+
+---
+
+## 2026-02-20 : Scoring multicritere avec poids configurables par filiere
+
+**Quoi** : Moteur de scoring 6 criteres (0-100) avec poids differents selon la filiere (solaire, eolien, BESS).
+
+**Pourquoi** : Les criteres n'ont pas le meme poids selon la technologie. L'irradiation est cruciale pour le solaire (25%) mais marginale pour le BESS (5%). La proximite reseau est critique pour le BESS (30%) car le stockage necessite une connexion directe.
+
+**Alternatives rejetees** :
+- Poids fixes identiques pour toutes les filieres : ne reflete pas la realite metier
+- Score binaire (oui/non) par critere : perte de granularite
+- Score purement IA (Claude API) : trop lent et couteux pour le scoring en temps reel
+
+**Impact** : Les scores varient de 69 a 79 sur les 8 projets demo, montrant une bonne differenciation.
+
+---
+
+## 2026-02-20 : Serialisation SQL brute pour les projets (UUID + Geometry)
+
+**Quoi** : Remplacement de `result.scalars().all()` par des requetes SQL brutes avec `ST_X(geom)` / `ST_Y(geom)` dans les routes projets.
+
+**Pourquoi** : SQLAlchemy ORM ne peut pas serialiser en JSON les colonnes UUID, Geometry (WKB binaire) et Decimal. La serialisation manuelle via SQL brut + `_serialize_projet()` permet de controler exactement le format de sortie.
+
+**Alternatives rejetees** :
+- Pydantic response_model avec custom validators : plus propre mais plus verbeux
+- `__json__()` sur le modele : invasif et ne gere pas Geometry
+
+**Impact** : Les endpoints `/projets` et `/projets/{id}` retournent maintenant lon/lat extraits proprement.
+
+---
+
+## 2026-02-20 : Vite esbuild target esnext pour MapLibre Workers
+
+**Quoi** : Ajout `optimizeDeps.esbuildOptions.target: "esnext"` dans vite.config.ts.
+
+**Pourquoi** : MapLibre GL JS v5 cree des Web Workers via Blob URL. esbuild de Vite transforme les class fields en utilisant un helper `__publicField` qui n'est pas disponible dans le contexte worker. Target `esnext` preserve les class fields natifs.
+
+**Alternatives rejetees** :
+- Build CSP (`maplibre-gl-csp.js` + `setWorkerUrl()`) : plus complexe, fichier worker a copier dans public/
+- Exclude MapLibre de optimizeDeps : impossible, MapLibre est CJS/UMD
+- Downgrade MapLibre v4 : perte des ameliorations v5
+
+**Impact** : Aucun impact negatif observe. Toutes les autres dependances fonctionnent avec esnext.
+
+---
+
+## 2026-02-20 : Pattern initRef guard pour MapLibre dans React StrictMode
+
+**Quoi** : Utilisation d'un `useRef(false)` guard dans le hook `useMapLibre` pour empecher la double-initialisation, et absence intentionnelle de cleanup function.
+
+**Pourquoi** : React 18 StrictMode execute mount→cleanup→mount. Le cleanup `map.remove()` annule le fetch du style en cours, corrompant l'instance. Le guard empeche la creation d'une deuxieme map.
+
+**Alternatives rejetees** :
+- Retirer StrictMode : perte des verifications en dev
+- Cleanup + re-creation : le fetch style avorte et le contexte WebGL est corrompu
+
+**Impact** : La map persiste a travers les cycles StrictMode. Le GC s'en occupe au vrai demontage (navigation).
+
+---
+
 ## 2026-02-19 : Pivot Assurance → ENR
 
 **Quoi** : Proxiam pivote du courtage d'assurance vers l'énergie renouvelable.
@@ -45,6 +267,47 @@
 **Alternatives rejetées** :
 - Elasticsearch : trop lourd pour 8 GB RAM
 - PostgreSQL `tsvector` : latence trop élevée, pas de facets
+
+---
+
+## 2026-02-20 : Meilisearch v1.6 → v1.12
+
+**Quoi** : Upgrade de Meilisearch Docker de v1.6 à v1.12.
+
+**Pourquoi** :
+- Le SDK Python `meilisearch-python-sdk v3.3.0` envoie `rankingScoreThreshold` par défaut
+- Ce paramètre n'est supporté qu'à partir de Meilisearch v1.8
+- Toutes les recherches échouaient silencieusement (catch → warning dans les logs)
+
+**Impact** : Volume Docker supprimé et recréé (réindexation nécessaire via `python -m app.seed.index_search`).
+
+---
+
+## 2026-02-20 : Layout hiérarchique vs force-directed pour le Knowledge Graph
+
+**Quoi** : Layout hiérarchique à 3 niveaux (bloc → phases → entités) au lieu d'un layout force-directed.
+
+**Pourquoi** :
+- Pas de dépendance externe (dagre, elk) nécessaire
+- Représentation intuitive de la hiérarchie 6D
+- Performance prévisible même avec 400+ nœuds
+- Regroupement visuel par type d'entité
+
+**Alternatives rejetées** :
+- dagre (layout auto) : dépendance supplémentaire, pas de contrôle sur le groupement par type
+- Force-directed (D3) : imprévisible avec 400+ nœuds, pas de couches claires
+
+---
+
+## 2026-02-20 : Relations créées par stratégie de mapping phase-to-bloc
+
+**Quoi** : Les relations dans les tables de jonction sont créées via un mapping P0-P6 → B1-B6 avec sélection de 2-3 phases par entité.
+
+**Pourquoi** :
+- Chaque entité (norme, risque, livrable) provient d'un fichier brainstorm tagué P0-P6
+- Le mapping phase_code → bloc_code permet de rattacher chaque entité aux bonnes phases
+- `pick_phases(ids, 3)` sélectionne 3 phases espacées uniformément pour une couverture représentative
+- Résultat : 13 290 relations (vs 0 avant)
 
 ---
 

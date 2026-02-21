@@ -140,12 +140,12 @@ export default function SearchBar() {
         onFocus={() => query.length >= 2 && results.length > 0 && setIsOpen(true)}
         onKeyDown={handleKeyDown}
         placeholder={t("common.search")}
-        className="h-9 w-full rounded-lg border border-slate-200 bg-slate-50 pl-9 pr-8 text-sm text-slate-700 outline-none transition-colors placeholder:text-slate-400 focus:border-primary-300 focus:bg-white focus:ring-1 focus:ring-primary-200 dark:border-slate-600 dark:bg-slate-700 dark:text-slate-200 dark:placeholder:text-slate-500 dark:focus:bg-slate-700"
+        className="h-11 w-full rounded-lg border border-slate-200 bg-slate-50 pl-9 pr-8 text-sm text-slate-700 outline-none transition-colors placeholder:text-slate-400 focus:border-primary-300 focus:bg-white focus:ring-1 focus:ring-primary-200 dark:border-slate-600 dark:bg-slate-700 dark:text-slate-200 dark:placeholder:text-slate-500 dark:focus:bg-slate-700 sm:h-9"
       />
       {query && (
         <button
           onClick={clear}
-          className="absolute right-2 top-1/2 -translate-y-1/2 rounded p-0.5 text-slate-400 hover:text-slate-600 dark:hover:text-slate-300"
+          className="absolute right-2 top-1/2 -translate-y-1/2 flex h-8 w-8 items-center justify-center rounded text-slate-400 hover:text-slate-600 dark:hover:text-slate-300"
         >
           <X className="h-3.5 w-3.5" />
         </button>

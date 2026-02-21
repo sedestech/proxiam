@@ -28,7 +28,7 @@ export default function Header() {
         {/* Theme toggle */}
         <button
           onClick={cycleTheme}
-          className="flex h-10 w-10 items-center justify-center rounded-lg text-slate-500 transition-colors hover:bg-slate-100 active:bg-slate-200 hover:text-slate-700 dark:text-slate-400 dark:hover:bg-slate-700 dark:hover:text-slate-200"
+          className="flex h-11 w-11 items-center justify-center rounded-lg text-slate-500 transition-colors hover:bg-slate-100 active:bg-slate-200 hover:text-slate-700 dark:text-slate-400 dark:hover:bg-slate-700 dark:hover:text-slate-200"
           title={`Theme: ${theme}`}
         >
           {theme === "dark" ? (
@@ -41,7 +41,7 @@ export default function Header() {
         {/* Language toggle */}
         <button
           onClick={toggleLanguage}
-          className="flex h-10 items-center gap-1 rounded-lg px-2 text-xs font-medium text-slate-500 transition-colors hover:bg-slate-100 active:bg-slate-200 hover:text-slate-700 dark:text-slate-400 dark:hover:bg-slate-700 dark:hover:text-slate-200 sm:gap-1.5 sm:px-2.5"
+          className="flex h-11 items-center gap-1 rounded-lg px-2 text-xs font-medium text-slate-500 transition-colors hover:bg-slate-100 active:bg-slate-200 hover:text-slate-700 dark:text-slate-400 dark:hover:bg-slate-700 dark:hover:text-slate-200 sm:gap-1.5 sm:px-2.5"
           title="Toggle language"
         >
           <Globe className="h-4 w-4" />
@@ -52,7 +52,7 @@ export default function Header() {
         <AlertBell />
 
         {/* Notifications — hide on very small screens to save space */}
-        <div className="hidden xs:block sm:block">
+        <div className="hidden sm:block">
           <NotificationDropdown />
         </div>
       </div>

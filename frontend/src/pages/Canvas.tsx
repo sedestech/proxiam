@@ -252,7 +252,7 @@ export default function Canvas() {
   return (
     <div className="flex h-full flex-col animate-fade-in">
       {/* Header */}
-      <div className="mb-4 flex items-center justify-between">
+      <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
         <div>
           <h1 className="text-2xl font-bold tracking-tight text-slate-900 dark:text-white">
             {t("nav.canvas")}
@@ -276,7 +276,7 @@ export default function Canvas() {
           </button>
 
           {dropdownOpen && projets && (
-            <div className="absolute right-0 top-full z-50 mt-1 max-h-64 w-64 overflow-y-auto rounded-xl border border-slate-200 bg-white shadow-lg dark:border-slate-600 dark:bg-slate-800">
+            <div className="absolute right-0 top-full z-50 mt-1 max-h-64 w-64 max-w-[calc(100vw-2rem)] overflow-y-auto rounded-xl border border-slate-200 bg-white shadow-lg dark:border-slate-600 dark:bg-slate-800">
               {projets.map((p) => (
                 <button
                   key={p.id}
@@ -306,14 +306,14 @@ export default function Canvas() {
 
       {/* Stats bar */}
       {selectedProject && (
-        <div className="mb-3 flex items-center gap-4 rounded-lg border border-slate-200 bg-white px-4 py-2.5 dark:border-slate-700 dark:bg-slate-800">
+        <div className="mb-3 flex flex-wrap items-center gap-2 rounded-lg border border-slate-200 bg-white px-4 py-2.5 dark:border-slate-700 dark:bg-slate-800 sm:gap-4">
           <div className="flex items-center gap-2">
             {filiereIcon(selectedProject.filiere)}
-            <span className="font-medium text-slate-900 dark:text-white">
+            <span className="max-w-[150px] truncate font-medium text-slate-900 dark:text-white sm:max-w-none">
               {selectedProject.nom}
             </span>
           </div>
-          <span className="text-slate-300 dark:text-slate-600">|</span>
+          <span className="hidden text-slate-300 dark:text-slate-600 sm:inline">|</span>
           <div className="flex items-center gap-3 text-xs text-slate-500 dark:text-slate-400">
             <span>
               <Check className="mr-1 inline h-3.5 w-3.5 text-emerald-500" />

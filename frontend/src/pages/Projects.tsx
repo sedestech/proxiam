@@ -327,13 +327,13 @@ export default function Projects() {
             value={filterSearch}
             onChange={(e) => setFilter("q", e.target.value)}
             placeholder={t("common.search")}
-            className="h-8 w-48 rounded-lg border border-slate-200 bg-white pl-8 pr-3 text-sm text-slate-700 outline-none focus:border-primary-300 focus:ring-1 focus:ring-primary-100 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-200"
+            className="min-h-[44px] w-full rounded-lg border border-slate-200 bg-white pl-8 pr-3 text-sm text-slate-700 outline-none focus:border-primary-300 focus:ring-1 focus:ring-primary-100 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-200 sm:h-8 sm:min-h-0 sm:w-48"
           />
         </div>
         <select
           value={filterFiliere}
           onChange={(e) => setFilter("filiere", e.target.value)}
-          className="h-8 rounded-lg border border-slate-200 bg-white px-3 text-sm text-slate-700 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-200"
+          className="min-h-[44px] rounded-lg border border-slate-200 bg-white px-3 text-sm text-slate-700 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-200 sm:h-8 sm:min-h-0"
         >
           <option value="">{t("projects.allFilieres")}</option>
           <option value="solaire_sol">Solaire sol</option>
@@ -343,7 +343,7 @@ export default function Projects() {
         <select
           value={filterStatut}
           onChange={(e) => setFilter("statut", e.target.value)}
-          className="h-8 rounded-lg border border-slate-200 bg-white px-3 text-sm text-slate-700 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-200"
+          className="min-h-[44px] rounded-lg border border-slate-200 bg-white px-3 text-sm text-slate-700 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-200 sm:h-8 sm:min-h-0"
         >
           <option value="">{t("projects.allStatuts")}</option>
           <option value="prospection">Prospection</option>
@@ -357,7 +357,7 @@ export default function Projects() {
             const next = sortBy === "nom" ? "score" : sortBy === "score" ? "mwc" : "nom";
             setFilter("sort", next);
           }}
-          className="flex h-8 items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 text-sm text-slate-600 hover:bg-slate-50 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-300 dark:hover:bg-slate-700"
+          className="flex min-h-[44px] items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 text-sm text-slate-600 hover:bg-slate-50 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-300 dark:hover:bg-slate-700 sm:h-8 sm:min-h-0"
         >
           <ArrowUpDown className="h-3.5 w-3.5" />
           <span className="hidden sm:inline">
@@ -372,7 +372,7 @@ export default function Projects() {
               params.delete("score_max");
               setSearchParams(params, { replace: true });
             }}
-            className="flex h-8 items-center gap-1.5 rounded-lg bg-primary-50 px-3 text-xs font-medium text-primary-700 hover:bg-primary-100 dark:bg-primary-500/10 dark:text-primary-400"
+            className="flex min-h-[44px] items-center gap-1.5 rounded-lg bg-primary-50 px-3 text-xs font-medium text-primary-700 hover:bg-primary-100 dark:bg-primary-500/10 dark:text-primary-400 sm:h-8 sm:min-h-0"
           >
             Score: {scoreMin}–{scoreMax}
             <span className="ml-1">&times;</span>

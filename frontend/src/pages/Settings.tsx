@@ -54,7 +54,7 @@ export default function Settings() {
           <select
             value={i18n.language}
             onChange={(e) => i18n.changeLanguage(e.target.value)}
-            className="rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-sm dark:border-slate-600 dark:bg-slate-700 dark:text-slate-200"
+            className="min-h-[44px] rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-sm dark:border-slate-600 dark:bg-slate-700 dark:text-slate-200 sm:min-h-0"
           >
             <option value="fr">Francais</option>
             <option value="en">English</option>
@@ -73,7 +73,7 @@ export default function Settings() {
           <select
             value={theme}
             onChange={(e) => setTheme(e.target.value as "light" | "dark" | "system")}
-            className="rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-sm dark:border-slate-600 dark:bg-slate-700 dark:text-slate-200"
+            className="min-h-[44px] rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-sm dark:border-slate-600 dark:bg-slate-700 dark:text-slate-200 sm:min-h-0"
           >
             <option value="light">{t("settings.light")}</option>
             <option value="dark">{t("settings.dark")}</option>
@@ -153,7 +153,7 @@ export default function Settings() {
                 setReindexing(false);
               }
             }}
-            className="flex items-center gap-2 rounded-lg border border-slate-200 px-3 py-1.5 text-sm font-medium text-slate-600 hover:bg-slate-50 disabled:opacity-50 dark:border-slate-600 dark:text-slate-300 dark:hover:bg-slate-700"
+            className="flex min-h-[44px] items-center gap-2 rounded-lg border border-slate-200 px-3 py-1.5 text-sm font-medium text-slate-600 hover:bg-slate-50 disabled:opacity-50 dark:border-slate-600 dark:text-slate-300 dark:hover:bg-slate-700 sm:min-h-0"
           >
             <RefreshCw className={`h-3.5 w-3.5 ${reindexing ? "animate-spin" : ""}`} />
             {t("settings.reindex")}
@@ -170,7 +170,7 @@ export default function Settings() {
         <div className="flex gap-3">
           <button
             onClick={() => navigate("/projects")}
-            className="flex items-center gap-2 rounded-lg border border-slate-200 px-4 py-2 text-sm font-medium text-slate-600 hover:bg-slate-50 dark:border-slate-600 dark:text-slate-300 dark:hover:bg-slate-700"
+            className="flex min-h-[44px] items-center gap-2 rounded-lg border border-slate-200 px-4 py-2 text-sm font-medium text-slate-600 hover:bg-slate-50 dark:border-slate-600 dark:text-slate-300 dark:hover:bg-slate-700 sm:min-h-0"
           >
             <Upload className="h-4 w-4" />
             {t("settings.importCsv")}
@@ -178,7 +178,7 @@ export default function Settings() {
           <a
             href={`${api.defaults.baseURL || ""}/api/projets/export/csv`}
             download
-            className="flex items-center gap-2 rounded-lg border border-slate-200 px-4 py-2 text-sm font-medium text-slate-600 hover:bg-slate-50 dark:border-slate-600 dark:text-slate-300 dark:hover:bg-slate-700"
+            className="flex min-h-[44px] items-center gap-2 rounded-lg border border-slate-200 px-4 py-2 text-sm font-medium text-slate-600 hover:bg-slate-50 dark:border-slate-600 dark:text-slate-300 dark:hover:bg-slate-700 sm:min-h-0"
           >
             <Download className="h-4 w-4" />
             {t("settings.exportCsv")}

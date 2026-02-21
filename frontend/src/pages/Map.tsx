@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, useCallback, useMemo } from "react";
 import { useTranslation } from "react-i18next";
-import { Layers, Loader2, AlertCircle, Eye, EyeOff, MapPin, Search, Crosshair, X } from "lucide-react";
+import { Layers, Loader2, AlertCircle, Eye, EyeOff, MapPin, Search, Crosshair, X, SlidersHorizontal } from "lucide-react";
 import maplibregl from "maplibre-gl";
 import "maplibre-gl/dist/maplibre-gl.css";
 import { usePosteSources } from "../hooks/usePosteSources";
@@ -196,6 +196,7 @@ export default function Map() {
   const [nearestMode, setNearestMode] = useState(false);
   const [nearestResults, setNearestResults] = useState<NearestResult[]>([]);
   const [nearestLoading, setNearestLoading] = useState(false);
+  const [mobileFiltersOpen, setMobileFiltersOpen] = useState(false);
   const nearestMarkerRef = useRef<maplibregl.Marker | null>(null);
 
   const { data: geojson, isLoading, isError } = usePosteSources();
@@ -467,12 +468,112 @@ export default function Map() {
           </div>
         )}
 
-        <div className="absolute bottom-4 left-4 z-10 flex items-center gap-2 rounded-lg bg-white/90 px-3 py-1.5 shadow-sm backdrop-blur-sm md:hidden">
+        {/* Mobile: stats badge */}
+        <div className="absolute bottom-20 left-4 z-10 flex items-center gap-2 rounded-lg bg-white/90 px-3 py-1.5 shadow-sm backdrop-blur-sm md:hidden">
           <Layers className="h-3.5 w-3.5 text-slate-500" />
           <span className="text-xs font-medium text-slate-600">
             {displayedCount.toLocaleString()} {t("map.postesSources").toLowerCase()}
           </span>
         </div>
+
+        {/* Mobile: filter FAB */}
+        <button
+          onClick={() => setMobileFiltersOpen(true)}
+          className="absolute bottom-20 right-4 z-10 flex h-12 w-12 items-center justify-center rounded-full bg-primary-500 text-white shadow-lg active:bg-primary-600 md:hidden"
+        >
+          <SlidersHorizontal className="h-5 w-5" />
+        </button>
+
+        {/* Mobile: filter bottom sheet */}
+        {mobileFiltersOpen && (
+          <div className="fixed inset-0 z-50 md:hidden">
+            <div className="absolute inset-0 bg-black/40" onClick={() => setMobileFiltersOpen(false)} />
+            <div className="absolute bottom-0 left-0 right-0 max-h-[70vh] overflow-y-auto rounded-t-2xl bg-white p-5 shadow-xl safe-area-inset-bottom dark:bg-slate-800">
+              <div className="mb-4 flex items-center justify-between">
+                <h3 className="text-base font-semibold text-slate-900 dark:text-white">{t("map.layers")}</h3>
+                <button
+                  onClick={() => setMobileFiltersOpen(false)}
+                  className="flex h-9 w-9 items-center justify-center rounded-lg text-slate-400 hover:bg-slate-100"
+                >
+                  <X className="h-5 w-5" />
+                </button>
+              </div>
+
+              {/* Search */}
+              <div className="mb-4">
+                <div className="relative">
+                  <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+                  <input
+                    type="text"
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    placeholder={t("map.searchPlaceholder")}
+                    className="min-h-[44px] w-full rounded-lg border border-slate-200 bg-white py-2 pl-10 pr-8 text-sm text-slate-700 placeholder:text-slate-400 focus:border-indigo-300 focus:outline-none focus:ring-1 focus:ring-indigo-300"
+                  />
+                </div>
+              </div>
+
+              {/* Layer toggle */}
+              <button
+                onClick={() => setLayerVisible(!layerVisible)}
+                className={`mb-4 flex min-h-[44px] w-full items-center gap-2.5 rounded-lg border px-3 py-2 text-sm font-medium transition-colors ${
+                  layerVisible
+                    ? "border-indigo-200 bg-indigo-50 text-indigo-700"
+                    : "border-slate-200 bg-white text-slate-500 hover:bg-slate-50"
+                }`}
+              >
+                {layerVisible ? <Eye className="h-4 w-4" /> : <EyeOff className="h-4 w-4" />}
+                <MapPin className="h-4 w-4" />
+                {t("map.postesSources")}
+              </button>
+
+              {/* Gestionnaire filters */}
+              <div className="mb-4">
+                <span className="mb-2 block text-xs font-semibold uppercase tracking-wider text-slate-400">
+                  {t("map.filterByGestionnaire")}
+                </span>
+                <div className="space-y-1">
+                  {(["RTE", "Enedis", "ELD", "Autre"] as const).map((g) => {
+                    const color = GESTIONNAIRE_COLORS[g] || DEFAULT_COLOR;
+                    const checked = visibleGestionnaires.has(g);
+                    const label = g === "Autre" ? t("map.other") : t(`map.${g.toLowerCase()}`);
+                    return (
+                      <label
+                        key={g}
+                        className="flex min-h-[44px] cursor-pointer items-center gap-3 rounded-md px-3 py-2 text-sm text-slate-700 transition-colors hover:bg-slate-50"
+                      >
+                        <input
+                          type="checkbox"
+                          checked={checked}
+                          onChange={() => toggleGestionnaire(g)}
+                          className="h-5 w-5 rounded border-slate-300 accent-indigo-600"
+                        />
+                        <span className="h-3 w-3 rounded-full" style={{ backgroundColor: color }} />
+                        {label}
+                      </label>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* Nearest poste */}
+              <button
+                onClick={() => {
+                  nearestMode ? clearNearest() : setNearestMode(true);
+                  setMobileFiltersOpen(false);
+                }}
+                className={`flex min-h-[44px] w-full items-center gap-2.5 rounded-lg border px-3 py-2 text-sm font-medium transition-colors ${
+                  nearestMode
+                    ? "border-red-200 bg-red-50 text-red-700"
+                    : "border-slate-200 bg-white text-slate-600 hover:bg-slate-50"
+                }`}
+              >
+                <Crosshair className="h-4 w-4" />
+                {nearestMode ? t("map.nearestCancel") : t("map.nearestClick")}
+              </button>
+            </div>
+          </div>
+        )}
 
         <div ref={mapContainerRef} className="h-full w-full" />
       </div>

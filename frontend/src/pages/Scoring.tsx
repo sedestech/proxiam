@@ -348,7 +348,7 @@ export default function Scoring() {
               </div>
               <button
                 onClick={() => scoreMutation.mutate(selectedId)}
-                className="mt-4 flex items-center gap-2 rounded-lg border border-slate-200 px-3 py-1.5 text-xs font-medium text-slate-600 hover:bg-slate-50"
+                className="mt-4 flex min-h-[44px] items-center gap-2 rounded-lg border border-slate-200 px-3 py-1.5 text-xs font-medium text-slate-600 hover:bg-slate-50 sm:min-h-0"
               >
                 <RefreshCw className="h-3 w-3" />
                 {t("scoring.recalculate")}

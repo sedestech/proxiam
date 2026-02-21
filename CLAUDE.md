@@ -80,6 +80,7 @@ PYTHONPATH=. python3 -m app.seed.import_data
 | Storage | MinIO (S3) |
 | Auth | Clerk (Sprint 6) |
 | AI | Anthropic Claude API |
+| PDF | fpdf2 (génération rapports) |
 | i18n | i18next (FR/EN) |
 
 ## API Endpoints
@@ -101,6 +102,14 @@ PYTHONPATH=. python3 -m app.seed.import_data
 | `GET /api/postes-sources/bbox` | Postes sources par bounding box |
 | `GET /api/postes-sources/nearest` | Postes sources les plus proches |
 | `POST /api/projets/{id}/score` | Calcul du score 0-100 |
+| `POST /api/projets/batch-score` | Scoring batch (N projets) |
+| `POST /api/projets/{id}/enrich` | Enrichissement PVGIS + contraintes |
+| `POST /api/projets/batch-enrich` | Enrichissement batch (N projets) |
+| `GET /api/projets/{id}/regulatory` | Analyse réglementaire auto |
+| `GET /api/projets/{id}/financial` | Estimation financière CAPEX/OPEX/TRI |
+| `POST /api/projets/{id}/report` | Génération rapport PDF |
+| `GET /api/projets/compare?ids=` | Comparaison multi-projets |
+| `GET /api/projets/compare/export?ids=` | Export CSV comparaison |
 | `GET /api/knowledge/graph` | Knowledge Graph (nodes+edges pour React Flow) |
 | `GET /api/search?q=` | Recherche globale (Meilisearch, 5167 docs, 7 index) |
 | Swagger | `GET /api/docs` |
@@ -156,11 +165,23 @@ cd frontend && npm run test:coverage    # Couverture
 
 - **Sprint 0** : Fondations (structure, Docker, schema, seed) ✓
 - **Sprint 1** : Knowledge Engine (Graph API, React Flow, Meilisearch) ✓
-- **Sprint 2** : Cartographie (MapLibre GL, MVT tiles, postes sources)
-- **Sprint 3** : Site Scoring (algorithme 0-100, radar chart)
-- **Sprint 4** : Gestion Projets (workflow P0→P7, timeline, portfolio)
-- **Sprint 5** : Agents IA (analyse docs, scoring, veille, génération)
-- **Sprint 6** : Polish & Deploy (auth, dark mode, export, VPS)
+- **Sprint 2** : Cartographie (MapLibre GL, MVT tiles, postes sources) ✓
+- **Sprint 3** : Site Scoring (algorithme 0-100, radar chart) ✓
+- **Sprint 4** : Gestion Projets (workflow P0→P7, timeline, portfolio) ✓
+- **Sprint 5** : Agents IA (analyse docs, scoring, veille, génération) ✓
+- **Sprint 6** : Polish (dark mode, export CSV, admin) ✓
+- **Sprint 7** : 3D (R3F) + CRUD + recherche globale ✓
+- **Sprint 8** : Workflow Canvas + Notifications ✓
+- **Sprint 9** : Documents MinIO + Import CSV/JSON + Settings ✓
+- **Sprint 10** : i18n complet FR/EN + Error Boundaries ✓
+- **Sprint 11** : Page recherche facettée + Analytics + Mobile ✓
+- **Sprint 12** : Batch scoring + Score filters + Benchmark marché ✓
+- **Sprint 13** : Enrichissement PVGIS + contraintes + scoring réel ✓
+- **Sprint 14** : Analyse réglementaire auto + expert consultant IA ✓
+- **Sprint 15** : Estimation financière CAPEX/OPEX/LCOE/TRI + PDF ✓
+- **Sprint 16** : Comparaison projets + Dashboard Top 5 + alertes ✓
+- **Sprint 17** : Auth Clerk + déploiement VPS (a venir)
+- **Sprint 18** : Veille active (cron scraping) + alertes temps réel (a venir)
 
 ## GitHub
 

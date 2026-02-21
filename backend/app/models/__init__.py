@@ -12,6 +12,7 @@ from app.models.competence import Competence
 from app.models.projet import Projet, ProjetPhase, ProjetRisque, ProjetDocument
 from app.models.poste_source import PosteSource
 from app.models.contrainte import Natura2000, Znieff
+from app.models.data_source_status import DataSourceStatus  # noqa: F401
 from app.models.relations import (
     PhaseLivrable,
     PhaseNorme,
@@ -45,6 +46,7 @@ __all__ = [
     "PosteSource",
     "Natura2000",
     "Znieff",
+    "DataSourceStatus",
     "PhaseLivrable",
     "PhaseNorme",
     "PhaseRisque",

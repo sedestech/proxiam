@@ -101,7 +101,7 @@ export default function Sidebar() {
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2 text-xs text-slate-400 dark:text-slate-500">
             <div className="h-1.5 w-1.5 rounded-full bg-emerald-400" />
-            <span>v1.9.4 — Sprint 18c</span>
+            <span>v2.0.0 — Sprint 19</span>
           </div>
           {UserButtonComponent && (
             <UserButtonComponent

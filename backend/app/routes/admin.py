@@ -363,3 +363,38 @@ async def platform_stats(
             "total_cost_eur": round(float(row["total_cost_eur"]), 2),
         },
     }
+
+
+# ─── Knowledge Graph Refresh ───
+
+
+@router.post("/admin/knowledge/refresh")
+async def refresh_knowledge_graph(
+    db: AsyncSession = Depends(get_db),
+    admin: User = Depends(require_admin),
+    dry: bool = Query(False, description="Parse only, no DB write"),
+):
+    """Re-import the 6D knowledge matrix from seed data."""
+    try:
+        from app.seed.import_data import run_import
+
+        result = await run_import(dry_run=dry)
+
+        # Update DataSourceStatus
+        if not dry:
+            await db.execute(
+                text("""
+                    INSERT INTO data_source_statuses
+                        (source_name, display_name, category, record_count, last_updated, update_frequency_days, quality_score, status)
+                    VALUES ('knowledge_6d', 'Matrice 6D (SolarBrainOS)', 'knowledge', :count, NOW(), 365, 95, 'ok')
+                    ON CONFLICT (source_name) DO UPDATE SET
+                        record_count = :count, last_updated = NOW(), status = 'ok'
+                """),
+                {"count": result.get("total", 0)},
+            )
+            await db.commit()
+
+        return result
+    except Exception as exc:
+        logger.error("Knowledge refresh failed: %s", exc)
+        return {"status": "error", "error": str(exc)}

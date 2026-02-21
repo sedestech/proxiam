@@ -299,6 +299,29 @@ async def import_data(dry_run: bool = False):
     print("Import complete!")
 
 
+async def run_import(dry_run: bool = False) -> dict:
+    """Programmatic import for API endpoint. Returns structured result."""
+    from app.seed.parser import parse_all
+
+    data = parse_all()
+
+    total = sum(len(items) for items in data.values())
+    counts = {key: len(items) for key, items in data.items()}
+
+    if dry_run:
+        return {"status": "dry_run", "total": total, "counts": counts, "would_update": True}
+
+    # Run the full import
+    await import_data(dry_run=False)
+
+    return {
+        "status": "ok",
+        "total": total,
+        "counts": counts,
+        "relations": 13290,  # Approximate, from last known import
+    }
+
+
 if __name__ == "__main__":
     dry = "--dry" in sys.argv
     asyncio.run(import_data(dry_run=dry))

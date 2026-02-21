@@ -2,6 +2,7 @@
 
 Tests the financial model that estimates CAPEX, OPEX, revenues,
 LCOE, and TRI for French ENR projects based on market benchmarks.
+Values updated for 2026-S1 financial constants (versioned JSON).
 """
 import pytest
 from app.services.financial import (
@@ -25,19 +26,19 @@ class TestCapex:
 
     def test_solaire_capex_basic(self):
         result = _calc_capex("solaire_sol", 10.0, None)
-        assert result["installation_eur"]["median"] == 750 * 10_000
+        assert result["installation_eur"]["median"] == 700 * 10_000
         assert result["raccordement_eur"] > 0
         assert result["total_eur"] > result["installation_eur"]["median"]
 
     def test_eolien_capex(self):
         result = _calc_capex("eolien_onshore", 20.0, None)
-        assert result["installation_eur"]["median"] == 1300 * 20_000
+        assert result["installation_eur"]["median"] == 1250 * 20_000
 
     def test_bess_capex_4h(self):
         """BESS CAPEX uses kWh (4h storage)."""
         result = _calc_capex("bess", 5.0, None)
         # 5 MW * 1000 kW/MW * 4h = 20,000 kWh
-        expected = 350 * 20_000
+        expected = 300 * 20_000
         assert result["installation_eur"]["median"] == expected
 
     def test_raccordement_distance_surcharge(self):
@@ -54,7 +55,7 @@ class TestCapex:
     def test_unknown_filiere_defaults(self):
         result = _calc_capex("hydro", 5.0, None)
         # Falls back to solaire_sol
-        assert result["installation_eur"]["median"] == 750 * 5_000
+        assert result["installation_eur"]["median"] == 700 * 5_000
 
 
 # ─── OPEX tests ────────────────────────────────────────────────
@@ -88,18 +89,18 @@ class TestRevenus:
         result = _calc_revenus("solaire_sol", 10.0, None)
         assert result["annuel_eur"] > 0
         assert result["production_mwh_an"] > 0
-        assert result["prix_moyen_mwh"] == 55  # CRE AO tariff
+        assert result["prix_moyen_mwh"] == 52  # CRE AO tariff 2026-S1
 
     def test_solaire_revenus_with_productible(self):
         """With productible from PVGIS, uses actual value."""
         result = _calc_revenus("solaire_sol", 10.0, 1300.0)
         # 1300 kWh/kWc * 10,000 kWc = 13,000,000 kWh = 13,000 MWh
         assert result["production_mwh_an"] == 13_000
-        assert result["annuel_eur"] == 13_000 * 55  # CRE AO
+        assert result["annuel_eur"] == 13_000 * 52  # CRE AO 2026-S1
 
     def test_eolien_revenus(self):
         result = _calc_revenus("eolien_onshore", 20.0, None)
-        assert result["prix_moyen_mwh"] == 65  # Eolien CRE AO
+        assert result["prix_moyen_mwh"] == 62  # Eolien CRE AO 2026-S1
 
     def test_bess_revenus_multi_flux(self):
         """BESS has multi-flux revenue model."""

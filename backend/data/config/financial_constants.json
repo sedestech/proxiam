@@ -1,0 +1,47 @@
+{
+  "version": "2026-S1",
+  "date": "2026-02-21",
+  "sources": [
+    "CRE AO S1 2026",
+    "ADEME Co\u00fbts ENR 2025",
+    "Bloomberg NEF Global Storage Outlook 2025",
+    "FEE Observatoire \u00e9olien 2025",
+    "RTE Bilan Pr\u00e9visionnel 2025"
+  ],
+  "capex": {
+    "solaire_sol": {"min": 600, "median": 700, "max": 900, "unit": "EUR/kWc", "tendance": "baisse (-5%/an)"},
+    "eolien_onshore": {"min": 1050, "median": 1250, "max": 1550, "unit": "EUR/kWc", "tendance": "stable"},
+    "bess": {"min": 200, "median": 300, "max": 450, "unit": "EUR/kWh", "tendance": "baisse (-15%/an LFP)"}
+  },
+  "opex_pct": {
+    "solaire_sol": 1.5,
+    "eolien_onshore": 3.0,
+    "bess": 2.0
+  },
+  "lifetime": {
+    "solaire_sol": 30,
+    "eolien_onshore": 25,
+    "bess": 15
+  },
+  "facteur_charge": {
+    "solaire_sol": 0.14,
+    "eolien_onshore": 0.24,
+    "bess": 0.15
+  },
+  "prix_vente": {
+    "solaire_sol": {"cre_ao": 52, "ppa": 48, "marche": 60},
+    "eolien_onshore": {"cre_ao": 62, "ppa": 52, "marche": 60},
+    "bess": {"fcr": 75, "afrr": 38, "arbitrage": 28, "capacite": 20}
+  },
+  "raccordement": {
+    "solaire_sol": {"min": 50, "median": 100, "max": 200},
+    "eolien_onshore": {"min": 80, "median": 150, "max": 300},
+    "bess": {"min": 30, "median": 80, "max": 150}
+  },
+  "discount_rate": 0.06,
+  "degradation_annual_pct": {
+    "solaire_sol": 0.4,
+    "eolien_onshore": 0.0,
+    "bess": 2.0
+  }
+}

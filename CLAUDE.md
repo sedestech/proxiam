@@ -65,6 +65,10 @@ PYTHONPATH=. python3 -m app.seed.import_data
 | `pytest` (backend/) | Tests pytest |
 | `npm run lint` (frontend/) | ESLint |
 | `python -m app.seed.index_search` (backend/) | Indexer dans Meilisearch |
+| `alembic upgrade head` (backend/) | Appliquer les migrations BDD |
+| `alembic revision --autogenerate -m "desc"` (backend/) | Créer une migration |
+| `python -m app.commands.import_natura2000 file.geojson` (backend/) | Import zones Natura 2000 |
+| `python -m app.commands.import_odre file.csv` (backend/) | Import projets ODRÉ |
 
 ## Stack
 
@@ -128,6 +132,8 @@ PYTHONPATH=. python3 -m app.seed.import_data
 | `DELETE /api/watches/{id}` | Supprimer une veille (auth) |
 | `GET /api/admin/scraping/status` | Statut scraping (admin) |
 | `POST /api/admin/scraping/run` | Lancer scraping manuel (admin) |
+| `GET /api/admin/data-health` | Statut fraîcheur/qualité datasets (admin) |
+| `POST /api/admin/knowledge/refresh` | Re-import matrice 6D (admin) |
 | Swagger | `GET /api/docs` |
 
 ## Data Model — Matrice 6D
@@ -143,6 +149,8 @@ Compétences (300) ←→ Phases, Outils
 
 Projets ← instances opérationnelles traversant la matrice
 Postes Sources (4847) ← infrastructure réseau géolocalisée
+Natura2000 ← zones protégées INPN (import GeoJSON)
+DataSourceStatus ← suivi fraîcheur/qualité datasets
 ```
 
 ## Design System
@@ -200,10 +208,12 @@ cd frontend && npm run test:coverage    # Couverture
 - **Sprint 18** : Veille active Bloomberg-quality (scrapers + IA batch + alertes) ✓
 - **Sprint 18b** : Mobile-first polish (MobileNav redesign, touch targets 44px, responsive tables/cards) ✓
 - **Sprint 18c** : Security hardening (CVE python-jose→PyJWT, auth on all write endpoints, SSRF protection, ownership checks) ✓
-- **Sprint 19** : Data lifecycle + Natura2000 + Alembic migrations + Stripe billing (priorité)
+- **Sprint 19** : Data lifecycle — Natura2000 + Alembic migrations + constantes financières 2026 + Data Health dashboard ✓
 - **Sprint 20** : Tests E2E Playwright + UX onboarding wizard + cross-pillar deep links
-- **Sprint 21** : Import GeoJSON + couches cartographiques enrichies + Data Health dashboard admin
-- **Sprint 22** : Déploiement VPS + CI/CD + monitoring (16GB RAM recommandé)
+- **Sprint 21** : Import GeoJSON + couches cartographiques enrichies (ZNIEFF, cadastre, PLU via WMS/WFS)
+- **Sprint 22** : Stripe billing + API marketplace + collaboration multi-user
+- **Sprint 23** : Data Lifecycle Agents autonomes + ML prédictif (entraîné sur données ODRÉ/MRAe)
+- **Sprint 24** : Déploiement VPS + CI/CD GitHub Actions + monitoring Sentry/Uptime Kuma (DERNIER)
 
 ## GitHub
 

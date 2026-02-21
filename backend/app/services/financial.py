@@ -1,101 +1,57 @@
 """Service d'estimation financiere — Sprint 15.
 
 Modele simplifie de business case pour projets ENR en France.
-Benchmarks marche 2024-2026 pour CAPEX, OPEX, revenus, LCOE, TRI.
+Benchmarks marche charges depuis data/config/financial_constants.json (versionne).
 
 Sources benchmarks :
-- CRE (tarifs AO), ADEME, Bloomberg NEF, IRENA
-- Retours terrain developpeurs ENR France
+- CRE AO S1 2026, ADEME Couts ENR 2025, Bloomberg NEF 2025
+- FEE Observatoire eolien 2025, RTE Bilan Previsionnel 2025
 
 Note : Ce n'est PAS un business plan complet. C'est une estimation
 rapide pour le screening de sites (precision +/- 20%).
 """
+import json
 import logging
+from pathlib import Path
 from typing import Any, Dict, Optional
 
 logger = logging.getLogger(__name__)
 
+# ─── Chargement des constantes financieres versionnees ────────────
 
-# ─── Benchmarks marche France 2024-2026 ──────────────────────────
+_CONSTANTS_PATH = Path(__file__).resolve().parent.parent.parent / "data" / "config" / "financial_constants.json"
+_constants_cache: Optional[Dict[str, Any]] = None
 
-# CAPEX en EUR/kWc installe (hors raccordement)
-CAPEX_BENCHMARKS = {
-    "solaire_sol": {
-        "min": 650,
-        "median": 750,
-        "max": 950,
-        "unit": "EUR/kWc",
-        "tendance": "baisse (-5%/an)",
-        "source": "CRE AO 2024 + ADEME",
-    },
-    "eolien_onshore": {
-        "min": 1100,
-        "median": 1300,
-        "max": 1600,
-        "unit": "EUR/kWc",
-        "tendance": "stable",
-        "source": "ADEME + FEE 2024",
-    },
-    "bess": {
-        "min": 250,
-        "median": 350,
-        "max": 500,
-        "unit": "EUR/kWh",
-        "tendance": "baisse (-15%/an, LFP)",
-        "source": "Bloomberg NEF 2024",
-    },
-}
 
-# OPEX en % du CAPEX par an
-OPEX_PCT = {
-    "solaire_sol": 1.5,    # 1-2% typique
-    "eolien_onshore": 3.0, # 2.5-3.5% (maintenance + assurance)
-    "bess": 2.0,           # 1.5-2.5% (degradation + O&M)
-}
+def _load_constants() -> Dict[str, Any]:
+    """Load financial constants from versioned JSON config.
 
-# Duree de vie en annees
-LIFETIME = {
-    "solaire_sol": 30,
-    "eolien_onshore": 25,
-    "bess": 15,
-}
+    Uses a module-level cache to avoid re-reading the file on every call.
+    """
+    global _constants_cache
+    if _constants_cache is not None:
+        return _constants_cache
+    with open(_CONSTANTS_PATH, encoding="utf-8") as f:
+        _constants_cache = json.load(f)
+    logger.info("Financial constants loaded: version=%s, date=%s", _constants_cache["version"], _constants_cache["date"])
+    return _constants_cache
 
-# Facteur de charge moyen France (heures equivalentes pleine puissance / 8760)
-FACTEUR_CHARGE = {
-    "solaire_sol": 0.14,     # ~1200 h eq. (France moyenne)
-    "eolien_onshore": 0.24,  # ~2100 h eq.
-    "bess": 0.15,            # 1-2 cycles/jour
-}
 
-# Prix de vente moyen de l'electricite (EUR/MWh)
-PRIX_VENTE = {
-    "solaire_sol": {
-        "cre_ao": 55,       # Tarif moyen AO CRE 2024
-        "ppa": 50,          # PPA corporate
-        "marche": 65,       # Prix marche spot moyen
-    },
-    "eolien_onshore": {
-        "cre_ao": 65,
-        "ppa": 55,
-        "marche": 65,
-    },
-    "bess": {
-        "fcr": 80,          # Reserve primaire (EUR/MW/h)
-        "afrr": 40,         # Reserve secondaire
-        "arbitrage": 30,    # Spread moyen
-        "capacite": 20,     # Mecanisme de capacite
-    },
-}
+def get_financial_version() -> Dict[str, Any]:
+    """Return metadata about the loaded financial constants."""
+    c = _load_constants()
+    return {"version": c["version"], "date": c["date"], "sources": c["sources"]}
 
-# Cout raccordement indicatif (EUR/kW)
-RACCORDEMENT_COST = {
-    "solaire_sol": {"min": 50, "median": 100, "max": 200},
-    "eolien_onshore": {"min": 80, "median": 150, "max": 300},
-    "bess": {"min": 30, "median": 80, "max": 150},
-}
 
-# Taux d'actualisation pour le LCOE
-DISCOUNT_RATE = 0.06  # 6% WACC typique ENR France
+# ─── Benchmarks marche France (depuis JSON versionne) ─────────────
+
+CAPEX_BENCHMARKS = _load_constants()["capex"]
+OPEX_PCT = _load_constants()["opex_pct"]
+LIFETIME = _load_constants()["lifetime"]
+FACTEUR_CHARGE = _load_constants()["facteur_charge"]
+PRIX_VENTE = _load_constants()["prix_vente"]
+RACCORDEMENT_COST = _load_constants()["raccordement"]
+DISCOUNT_RATE = _load_constants()["discount_rate"]
 
 
 # ─── Calculs financiers ──────────────────────────────────────────
@@ -133,7 +89,7 @@ def _calc_capex(filiere: str, puissance_mwc: float, distance_poste_km: Optional[
         "total_eur": round(capex_median + racc_cost),
         "eur_par_kwc": round(bench["median"] + racc["median"]),
         "tendance": bench["tendance"],
-        "source": bench["source"],
+        "source": ", ".join(_load_constants()["sources"]),
     }
 
 

@@ -1,4 +1,28 @@
-# Changelog — Proxiam OS ENR
+# CHANGELOG — Proxiam OS Énergie Renouvelable
+
+## [v2.0.0] — Sprint 19 — Data Lifecycle + Données Réelles (2026-02-21)
+
+### Added
+- **Alembic migrations** — Schema versioning, initial migration generated from 29 existing tables
+- **DataSourceStatus model** — Tracks freshness, quality, and record counts for every dataset
+- **Data Health dashboard** — New admin tab showing overall health, staleness detection, quality scores
+- **Financial constants JSON** — Extracted from hardcoded Python to versioned `data/config/financial_constants.json` (2026-S1)
+- **Natura 2000 import command** — `python -m app.commands.import_natura2000 file.geojson` with dry-run support
+- **ODRÉ reference import command** — `python -m app.commands.import_odre file.csv` for benchmark market data
+- **Knowledge Graph refresh** — `POST /api/admin/knowledge/refresh` re-imports 6D matrix from seed data
+- **i18n keys** — Data Health section (FR/EN)
+
+### Changed
+- `main.py` — Removed `Base.metadata.create_all()`, schema now managed by Alembic
+- `financial.py` — Loads constants from JSON config instead of hardcoded dicts
+- Admin dashboard — Added 5th tab "Data Health" with source status table + overall health bar
+
+### Technical
+- 30+ new backend tests (data health, financial constants, natura2000, ODRÉ, knowledge refresh)
+- 5 new frontend tests (data health tab logic)
+- Alembic migration chain: initial_schema → add_data_source_statuses
+
+---
 
 ## [1.9.0] — 2026-02-21 — Sprint 18b : Mobile-First Polish
 

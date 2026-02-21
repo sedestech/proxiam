@@ -22,6 +22,7 @@ import {
   Activity,
   DollarSign,
   Shield,
+  HeartPulse,
 } from "lucide-react";
 import api from "../lib/api";
 import QueryError from "../components/QueryError";
@@ -70,6 +71,24 @@ interface UsageData {
   daily: { day: string; count: number; cost_eur: number }[];
 }
 
+interface DataHealthSource {
+  source_name: string;
+  display_name: string;
+  category: string;
+  record_count: number;
+  last_updated: string | null;
+  days_since_update: number | null;
+  update_frequency_days: number;
+  status: "ok" | "stale" | "error" | "loading";
+  quality_score: number;
+  notes: string | null;
+}
+
+interface DataHealthResponse {
+  overall_health_pct: number;
+  sources: DataHealthSource[];
+}
+
 // ─── Helpers ───
 
 const SERVICE_META: Record<string, { icon: typeof Database; label: string; color: string }> = {
@@ -93,7 +112,7 @@ function StatusIcon({ status }: { status: string }) {
 
 // ─── Tabs ───
 
-type Tab = "overview" | "users" | "usage" | "services";
+type Tab = "overview" | "users" | "usage" | "services" | "dataHealth";
 
 export default function Admin() {
   const { t } = useTranslation();
@@ -127,6 +146,13 @@ export default function Admin() {
     retry: false,
   });
 
+  const { data: dataHealth } = useQuery<DataHealthResponse>({
+    queryKey: ["admin-data-health"],
+    queryFn: async () => (await api.get("/api/admin/data-health")).data,
+    enabled: tab === "dataHealth",
+    retry: false,
+  });
+
   // Mutation: change tier
   const tierMutation = useMutation({
     mutationFn: async ({ userId, tier }: { userId: string; tier: string }) => {
@@ -140,6 +166,7 @@ export default function Admin() {
     { key: "users", label: t("admin.users"), icon: Users },
     { key: "usage", label: t("admin.usage"), icon: Activity },
     { key: "services", label: t("admin.services"), icon: Server },
+    { key: "dataHealth", label: t("admin.dataHealth"), icon: HeartPulse },
   ];
 
   return (
@@ -468,6 +495,174 @@ export default function Admin() {
             </div>
           )}
         </>
+      )}
+
+      {/* ─── Data Health Tab ─── */}
+      {tab === "dataHealth" && (
+        <div className="space-y-4">
+          {/* Overall health bar */}
+          {dataHealth && (
+            <div className="card">
+              <div className="flex items-center justify-between mb-2">
+                <h2 className="text-sm font-medium text-slate-700 dark:text-slate-300">
+                  {t("admin.overallHealth")}
+                </h2>
+                <span className={`text-lg font-bold ${
+                  dataHealth.overall_health_pct >= 80 ? "text-emerald-600" :
+                  dataHealth.overall_health_pct >= 60 ? "text-amber-600" : "text-red-600"
+                }`}>
+                  {dataHealth.overall_health_pct}%
+                </span>
+              </div>
+              <div className="h-3 w-full rounded-full bg-slate-100 dark:bg-slate-700 overflow-hidden">
+                <div
+                  className={`h-full rounded-full transition-all duration-500 ${
+                    dataHealth.overall_health_pct >= 80 ? "bg-emerald-500" :
+                    dataHealth.overall_health_pct >= 60 ? "bg-amber-500" : "bg-red-500"
+                  }`}
+                  style={{ width: `${Math.max(0, Math.min(100, dataHealth.overall_health_pct))}%` }}
+                />
+              </div>
+            </div>
+          )}
+
+          {/* Data sources table — desktop */}
+          {dataHealth && (
+            <div className="card hidden overflow-x-auto md:block">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b border-slate-100 dark:border-slate-700">
+                    <th className="py-2 pr-4 text-left text-xs font-medium text-slate-500">{t("admin.source")}</th>
+                    <th className="py-2 pr-4 text-left text-xs font-medium text-slate-500">{t("knowledge.category")}</th>
+                    <th className="py-2 pr-4 text-right text-xs font-medium text-slate-500">{t("admin.records")}</th>
+                    <th className="py-2 pr-4 text-left text-xs font-medium text-slate-500">{t("admin.lastUpdate")}</th>
+                    <th className="py-2 pr-4 text-left text-xs font-medium text-slate-500">{t("common.status")}</th>
+                    <th className="py-2 pr-4 text-left text-xs font-medium text-slate-500">{t("admin.quality")}</th>
+                    <th className="py-2 text-left text-xs font-medium text-slate-500">Notes</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {dataHealth.sources.map((src) => (
+                    <tr key={src.source_name} className="border-b border-slate-50 dark:border-slate-700/50">
+                      <td className="py-2.5 pr-4 font-medium text-slate-900 dark:text-white">
+                        {src.display_name}
+                      </td>
+                      <td className="py-2.5 pr-4">
+                        <span className="rounded-full bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-600 dark:bg-slate-700 dark:text-slate-300">
+                          {src.category}
+                        </span>
+                      </td>
+                      <td className="py-2.5 pr-4 text-right font-mono text-slate-700 dark:text-slate-300">
+                        {src.record_count.toLocaleString()}
+                      </td>
+                      <td className="py-2.5 pr-4 text-xs text-slate-500">
+                        {src.days_since_update != null
+                          ? t("admin.daysAgo", { days: src.days_since_update })
+                          : t("admin.never")}
+                      </td>
+                      <td className="py-2.5 pr-4">
+                        <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${
+                          src.status === "ok" ? "bg-emerald-50 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400" :
+                          src.status === "stale" ? "bg-amber-50 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400" :
+                          src.status === "error" ? "bg-red-50 text-red-700 dark:bg-red-900/30 dark:text-red-400" :
+                          "bg-blue-50 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400"
+                        }`}>
+                          {src.status === "ok" ? t("admin.ok") :
+                           src.status === "stale" ? t("admin.stale") :
+                           src.status === "error" ? t("admin.error") :
+                           t("admin.loading")}
+                        </span>
+                      </td>
+                      <td className="py-2.5 pr-4">
+                        <div className="flex items-center gap-2">
+                          <div className="h-2 w-16 rounded-full bg-slate-100 dark:bg-slate-700 overflow-hidden">
+                            <div
+                              className={`h-full rounded-full ${
+                                src.quality_score >= 80 ? "bg-emerald-500" :
+                                src.quality_score >= 60 ? "bg-amber-500" : "bg-red-500"
+                              }`}
+                              style={{ width: `${Math.max(0, Math.min(100, src.quality_score))}%` }}
+                            />
+                          </div>
+                          <span className="text-xs font-mono text-slate-500">{src.quality_score}</span>
+                        </div>
+                      </td>
+                      <td className="py-2.5 text-xs text-slate-400">
+                        {src.notes || "—"}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+              {dataHealth.sources.length === 0 && (
+                <p className="py-8 text-center text-sm text-slate-400">{t("common.noData")}</p>
+              )}
+            </div>
+          )}
+
+          {/* Data sources cards — mobile */}
+          {dataHealth && (
+            <div className="space-y-3 md:hidden">
+              {dataHealth.sources.map((src) => (
+                <div key={src.source_name} className="card space-y-3 p-4">
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="min-w-0">
+                      <p className="truncate font-medium text-slate-900 dark:text-white">{src.display_name}</p>
+                      <span className="rounded-full bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-600 dark:bg-slate-700 dark:text-slate-300">
+                        {src.category}
+                      </span>
+                    </div>
+                    <span className={`shrink-0 inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${
+                      src.status === "ok" ? "bg-emerald-50 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400" :
+                      src.status === "stale" ? "bg-amber-50 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400" :
+                      src.status === "error" ? "bg-red-50 text-red-700 dark:bg-red-900/30 dark:text-red-400" :
+                      "bg-blue-50 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400"
+                    }`}>
+                      {src.status === "ok" ? t("admin.ok") :
+                       src.status === "stale" ? t("admin.stale") :
+                       src.status === "error" ? t("admin.error") :
+                       t("admin.loading")}
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-4 text-xs text-slate-500">
+                    <span>{src.record_count.toLocaleString()} {t("admin.records").toLowerCase()}</span>
+                    <span>
+                      {src.days_since_update != null
+                        ? t("admin.daysAgo", { days: src.days_since_update })
+                        : t("admin.never")}
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs text-slate-500">{t("admin.quality")}</span>
+                    <div className="h-2 flex-1 rounded-full bg-slate-100 dark:bg-slate-700 overflow-hidden">
+                      <div
+                        className={`h-full rounded-full ${
+                          src.quality_score >= 80 ? "bg-emerald-500" :
+                          src.quality_score >= 60 ? "bg-amber-500" : "bg-red-500"
+                        }`}
+                        style={{ width: `${Math.max(0, Math.min(100, src.quality_score))}%` }}
+                      />
+                    </div>
+                    <span className="text-xs font-mono text-slate-500">{src.quality_score}</span>
+                  </div>
+                  {src.notes && (
+                    <p className="text-xs text-slate-400">{src.notes}</p>
+                  )}
+                </div>
+              ))}
+              {dataHealth.sources.length === 0 && (
+                <p className="py-8 text-center text-sm text-slate-400">{t("common.noData")}</p>
+              )}
+            </div>
+          )}
+
+          {/* Loading state */}
+          {!dataHealth && (
+            <div className="flex h-40 items-center justify-center text-sm text-slate-400">
+              {t("common.loading")}
+            </div>
+          )}
+        </div>
       )}
     </div>
   );

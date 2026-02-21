@@ -19,7 +19,8 @@ class RssScraper(BaseScraper):
         if not resp:
             return []
 
-        feed = feedparser.parse(resp.text)
+        # Truncate to 500KB to prevent memory issues with very large feeds
+        feed = feedparser.parse(resp.text[:500_000])
         items = []
 
         for entry in feed.entries:

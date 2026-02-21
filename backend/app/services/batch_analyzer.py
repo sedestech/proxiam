@@ -33,6 +33,14 @@ Contenu (extrait): {content}
 Réponds UNIQUEMENT avec le JSON, sans markdown."""
 
 
+def _get_anthropic_client():
+    """Get or create a reusable async Anthropic client."""
+    if not hasattr(_get_anthropic_client, "_client") or _get_anthropic_client._client is None:
+        import anthropic
+        _get_anthropic_client._client = anthropic.AsyncAnthropic(api_key=settings.anthropic_api_key)
+    return _get_anthropic_client._client
+
+
 async def _analyze_single(content: ScrapedContent) -> dict:
     """Analyze a single content item with Claude Haiku."""
     if not settings.anthropic_api_key:
@@ -43,8 +51,7 @@ async def _analyze_single(content: ScrapedContent) -> dict:
             "domains": [],
         }
 
-    import anthropic
-    client = anthropic.AsyncAnthropic(api_key=settings.anthropic_api_key)
+    client = _get_anthropic_client()
 
     # Truncate content to save tokens
     truncated = (content.content_text or "")[:4000]

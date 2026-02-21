@@ -550,7 +550,7 @@ async def update_projet(
     # Build dynamic SET clause
     updates = []
     params: dict = {"id": projet_id}
-    update_data = body.dict(exclude_unset=True)
+    update_data = body.model_dump(exclude_unset=True)
 
     # Handle lon/lat → geom separately
     if "lon" in update_data and "lat" in update_data:
@@ -565,7 +565,11 @@ async def update_projet(
     elif "lat" in update_data:
         update_data.pop("lat")
 
+    # Whitelist of allowed SQL column names (defense-in-depth)
+    ALLOWED_FIELDS = {"nom", "filiere", "puissance_mwc", "surface_ha", "commune", "departement", "region", "statut"}
     for field, value in update_data.items():
+        if field not in ALLOWED_FIELDS:
+            continue
         updates.append(f"{field} = :{field}")
         params[field] = value
 

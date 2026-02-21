@@ -10,6 +10,7 @@ from datetime import datetime, timezone
 from sqlalchemy import select, text, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.database import async_session
 from app.models.scraped_content import ScrapedContent
 from app.scrapers.base import BaseScraper
 from app.scrapers.rss_scraper import RssScraper
@@ -29,9 +30,12 @@ SCRAPERS: dict[str, BaseScraper] = {
 MAX_CONCURRENT = 5
 
 
-async def _scrape_source(db: AsyncSession, source_id: int, url: str, source_type: str, semaphore: asyncio.Semaphore) -> dict:
-    """Scrape a single source and store results."""
-    async with semaphore:
+async def _scrape_source(source_id: int, url: str, source_type: str, semaphore: asyncio.Semaphore) -> dict:
+    """Scrape a single source and store results.
+
+    Each task gets its own DB session to avoid concurrent session usage issues.
+    """
+    async with semaphore, async_session() as db:
         scraper = SCRAPERS.get(source_type)
         if not scraper:
             return {"source_id": source_id, "status": "skipped", "reason": f"no scraper for {source_type}"}
@@ -114,7 +118,7 @@ async def run_scraping(db: AsyncSession) -> dict:
     for source in sources:
         source_type = source["type_source"] or "scraping"
         tasks.append(
-            _scrape_source(db, source["id"], source["url"], source_type, semaphore)
+            _scrape_source(source["id"], source["url"], source_type, semaphore)
         )
 
     results = await asyncio.gather(*tasks, return_exceptions=True)

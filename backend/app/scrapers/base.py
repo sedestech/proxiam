@@ -2,6 +2,7 @@
 
 Abstract base class for all scrapers with retry, hashing, and rate limiting.
 """
+import asyncio
 import hashlib
 import ipaddress
 import logging
@@ -110,7 +111,6 @@ class BaseScraper(ABC):
             except httpx.HTTPStatusError as e:
                 if e.response.status_code == 429:
                     # Rate limited — wait longer
-                    import asyncio
                     wait = (attempt + 1) * 5
                     logger.warning("Rate limited on %s, waiting %ds", url, wait)
                     await asyncio.sleep(wait)
@@ -122,7 +122,6 @@ class BaseScraper(ABC):
                 logger.error("Fetch error for %s: %s (attempt %d)", url, e, attempt + 1)
                 if attempt == self.max_retries - 1:
                     return None
-                import asyncio
                 await asyncio.sleep((attempt + 1) * 2)
         return None
 

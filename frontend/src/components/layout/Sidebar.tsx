@@ -14,6 +14,19 @@ import {
   Zap,
 } from "lucide-react";
 
+// Conditional Clerk import — works in dev mode without Clerk
+let UserButtonComponent: React.ComponentType<{ afterSignOutUrl?: string; appearance?: Record<string, unknown> }> | null = null;
+let useUserHook: (() => { user: { publicMetadata?: Record<string, unknown> } | null | undefined; isSignedIn: boolean }) | null = null;
+
+try {
+  // Vite will resolve this at build time. If @clerk/clerk-react is not installed, the catch handles it.
+  const clerk = await import("@clerk/clerk-react");
+  UserButtonComponent = clerk.UserButton;
+  useUserHook = clerk.useUser;
+} catch {
+  // Clerk not available — dev mode without auth
+}
+
 const navItems = [
   { to: "/", icon: LayoutDashboard, labelKey: "nav.dashboard" },
   { to: "/map", icon: MapPin, labelKey: "nav.map" },
@@ -23,12 +36,27 @@ const navItems = [
   { to: "/projects", icon: FolderKanban, labelKey: "nav.projects" },
   { to: "/scoring", icon: Target, labelKey: "nav.scoring" },
   { to: "/veille", icon: Radar, labelKey: "nav.veille" },
-  { to: "/admin", icon: Shield, labelKey: "nav.admin" },
   { to: "/settings", icon: Settings, labelKey: "nav.settings" },
 ];
 
+const adminItem = { to: "/admin", icon: Shield, labelKey: "nav.admin" };
+
 export default function Sidebar() {
   const { t } = useTranslation();
+
+  // Check if user is admin
+  let isAdmin = true; // Default: show admin in dev mode
+  if (useUserHook) {
+    try {
+      const { user } = useUserHook();
+      const tier = user?.publicMetadata?.tier as string | undefined;
+      isAdmin = tier === "admin" || tier === undefined; // Show if admin or no metadata set
+    } catch {
+      isAdmin = true;
+    }
+  }
+
+  const items = isAdmin ? [...navItems.slice(0, 8), adminItem, navItems[8]] : navItems;
 
   return (
     <aside className="flex h-screen w-[260px] flex-col border-r border-slate-200 bg-white dark:border-slate-700 dark:bg-slate-800">
@@ -49,7 +77,7 @@ export default function Sidebar() {
 
       {/* Navigation */}
       <nav className="flex-1 space-y-0.5 overflow-y-auto px-3 py-3">
-        {navItems.map(({ to, icon: Icon, labelKey }) => (
+        {items.map(({ to, icon: Icon, labelKey }) => (
           <NavLink
             key={to}
             to={to}
@@ -68,11 +96,23 @@ export default function Sidebar() {
         ))}
       </nav>
 
-      {/* Status bar */}
+      {/* User + Status bar */}
       <div className="border-t border-slate-100 px-4 py-3 dark:border-slate-700">
-        <div className="flex items-center gap-2 text-xs text-slate-400 dark:text-slate-500">
-          <div className="h-1.5 w-1.5 rounded-full bg-emerald-400" />
-          <span>v1.2.0 — Sprint 11</span>
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2 text-xs text-slate-400 dark:text-slate-500">
+            <div className="h-1.5 w-1.5 rounded-full bg-emerald-400" />
+            <span>v1.9.1 — Sprint 18c</span>
+          </div>
+          {UserButtonComponent && (
+            <UserButtonComponent
+              afterSignOutUrl="/sign-in"
+              appearance={{
+                elements: {
+                  avatarBox: "h-7 w-7",
+                },
+              }}
+            />
+          )}
         </div>
       </div>
     </aside>

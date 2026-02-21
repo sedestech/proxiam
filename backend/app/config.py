@@ -32,6 +32,11 @@ class Settings(BaseSettings):
     # AI
     anthropic_api_key: str = ""
 
+    # Clerk Auth
+    clerk_domain: str = ""
+    clerk_publishable_key: str = ""
+    clerk_secret_key: str = ""
+
     @property
     def database_url(self) -> str:
         return (
@@ -54,3 +59,12 @@ class Settings(BaseSettings):
 
 
 settings = Settings()
+
+# Production safety check
+import warnings
+
+if settings.postgres_password == "proxiam_dev":
+    warnings.warn(
+        "Using default postgres_password — change in production!",
+        stacklevel=2,
+    )

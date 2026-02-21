@@ -28,10 +28,17 @@ httpx==0.27.0
 
 # Security
 slowapi==0.1.9
-python-jose[cryptography]==3.3.0
+PyJWT[crypto]>=2.8.0
 
 # PDF
 fpdf2==2.8.1
+
+# Scraping
+beautifulsoup4>=4.12
+feedparser>=6.0
+
+# Scheduler
+apscheduler>=3.10
 
 # Utils
 python-multipart==0.0.9

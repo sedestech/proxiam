@@ -9,14 +9,21 @@ from slowapi.util import get_remote_address
 from app.config import settings
 from app.database import engine, Base
 from app.middleware import SecurityHeadersMiddleware
-from app.routes import knowledge, projects, geo, scoring, search, health, graph, ai, notifications, documents, enrichment
+from app.routes import knowledge, projects, geo, scoring, search, health, graph, ai, notifications, documents, enrichment, admin, veille
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
+
+    # Start scheduler (Sprint 18 — veille active)
+    from app.scheduler import start_scheduler, stop_scheduler
+    start_scheduler()
+
     yield
+
+    stop_scheduler()
     await engine.dispose()
 
 
@@ -61,3 +68,5 @@ app.include_router(ai.router, prefix="/api", tags=["ai"])
 app.include_router(notifications.router, prefix="/api", tags=["notifications"])
 app.include_router(documents.router, prefix="/api", tags=["documents"])
 app.include_router(enrichment.router, prefix="/api", tags=["enrichment"])
+app.include_router(admin.router, prefix="/api", tags=["admin"])
+app.include_router(veille.router, prefix="/api", tags=["veille"])

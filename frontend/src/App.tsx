@@ -20,6 +20,7 @@ const Veille = lazy(() => import("./pages/Veille"));
 const Settings = lazy(() => import("./pages/Settings"));
 const SearchResults = lazy(() => import("./pages/SearchResults"));
 const Compare = lazy(() => import("./pages/Compare"));
+const SignIn = lazy(() => import("./pages/SignIn"));
 
 function PageWrapper({ children }: { children: React.ReactNode }) {
   return (
@@ -32,6 +33,10 @@ function PageWrapper({ children }: { children: React.ReactNode }) {
 export default function App() {
   return (
     <Routes>
+      {/* Auth pages (no layout) */}
+      <Route path="sign-in/*" element={<PageWrapper><SignIn /></PageWrapper>} />
+
+      {/* Main app */}
       <Route element={<Layout />}>
         <Route index element={<Dashboard />} />
         <Route path="map" element={<PageWrapper><Map /></PageWrapper>} />

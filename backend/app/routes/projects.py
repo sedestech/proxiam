@@ -15,8 +15,10 @@ from pydantic import BaseModel, Field
 from sqlalchemy import select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.auth import get_current_user, require_user
 from app.database import get_db
 from app.models import Projet
+from app.models.user import User
 from app.routes.notifications import create_notification
 from app.services.financial import estimate_financial
 from app.services.regulatory import analyze_regulatory
@@ -79,9 +81,15 @@ async def list_projets(
     limit: int = Query(50, le=200),
     offset: int = Query(0, ge=0),
     db: AsyncSession = Depends(get_db),
+    user: Optional[User] = Depends(get_current_user),
 ):
     conditions = ["1=1"]
     params: dict = {"limit": limit, "offset": offset}
+
+    # Multi-tenant: filter by user if authenticated
+    if user:
+        conditions.append("(user_id = :user_id OR user_id IS NULL)")
+        params["user_id"] = str(user.id)
 
     if filiere:
         conditions.append("filiere = :filiere")
@@ -113,23 +121,6 @@ async def list_projets(
     result = await db.execute(query, params)
     rows = result.mappings().all()
     return [_serialize_projet(dict(r)) for r in rows]
-
-
-@router.get("/projets/{projet_id}")
-async def get_projet(projet_id: str, db: AsyncSession = Depends(get_db)):
-    query = text("""
-        SELECT id, nom, filiere, puissance_mwc, surface_ha,
-               commune, departement, region, statut, score_global,
-               ST_X(geom) as lon, ST_Y(geom) as lat,
-               date_creation
-        FROM projets
-        WHERE id = :id
-    """)
-    result = await db.execute(query, {"id": projet_id})
-    row = result.mappings().first()
-    if not row:
-        raise HTTPException(status_code=404, detail="Projet non trouve")
-    return _serialize_projet(dict(row))
 
 
 @router.get("/projets/{projet_id}/phases")
@@ -176,9 +167,13 @@ async def get_projet_phases(projet_id: str, db: AsyncSession = Depends(get_db)):
 
 
 @router.get("/projets/stats/summary")
-async def projets_stats(db: AsyncSession = Depends(get_db)):
+async def projets_stats(
+    db: AsyncSession = Depends(get_db),
+    user: Optional[User] = Depends(get_current_user),
+):
     """Return portfolio summary statistics."""
-    query = text("""
+    user_filter = "WHERE (user_id = :user_id OR user_id IS NULL)" if user else ""
+    query = text(f"""
         SELECT
             COUNT(*) as total,
             COUNT(*) FILTER (WHERE statut = 'prospection') as prospection,
@@ -190,8 +185,10 @@ async def projets_stats(db: AsyncSession = Depends(get_db)):
             COALESCE(SUM(puissance_mwc), 0) as total_mwc,
             COUNT(DISTINCT filiere) as nb_filieres
         FROM projets
+        {user_filter}
     """)
-    result = await db.execute(query)
+    params = {"user_id": str(user.id)} if user else {}
+    result = await db.execute(query, params)
     row = result.mappings().first()
     return {
         "total": row["total"],
@@ -209,7 +206,10 @@ async def projets_stats(db: AsyncSession = Depends(get_db)):
 
 
 @router.get("/projets/stats/analytics")
-async def projets_analytics(db: AsyncSession = Depends(get_db)):
+async def projets_analytics(
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(require_user),
+):
     """Return analytics data: score distribution, filiere performance, phase stats."""
     # Score distribution (10-point buckets: 0-9, 10-19, ..., 90-100)
     score_query = text("""
@@ -269,7 +269,10 @@ async def projets_analytics(db: AsyncSession = Depends(get_db)):
 
 
 @router.get("/projets/export/csv")
-async def export_projets_csv(db: AsyncSession = Depends(get_db)):
+async def export_projets_csv(
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(require_user),
+):
     """Export all projects as CSV file."""
     query = text("""
         SELECT id, nom, filiere, puissance_mwc, surface_ha,
@@ -321,6 +324,7 @@ async def export_projets_csv(db: AsyncSession = Depends(get_db)):
 async def compare_projects(
     ids: str = Query(..., description="Comma-separated project IDs (max 10)"),
     db: AsyncSession = Depends(get_db),
+    user: User = Depends(require_user),
 ):
     """Compare multiple projects side-by-side.
 
@@ -409,9 +413,10 @@ async def compare_projects(
 async def export_compare_csv(
     ids: str = Query(..., description="Comma-separated project IDs"),
     db: AsyncSession = Depends(get_db),
+    user: User = Depends(require_user),
 ):
     """Export comparison data as CSV."""
-    compare_data = await compare_projects(ids=ids, db=db)
+    compare_data = await compare_projects(ids=ids, db=db, user=user)
 
     output = io.StringIO()
     writer = csv.writer(output, delimiter=";")
@@ -443,20 +448,54 @@ async def export_compare_csv(
     )
 
 
+# ─── Single project (after fixed-path routes to avoid route conflicts) ───
+
+
+@router.get("/projets/{projet_id}")
+async def get_projet(
+    projet_id: str,
+    db: AsyncSession = Depends(get_db),
+    user: Optional[User] = Depends(get_current_user),
+):
+    """Get a single project by ID."""
+    query = text("""
+        SELECT id, nom, filiere, puissance_mwc, surface_ha,
+               commune, departement, region, statut, score_global,
+               ST_X(geom) as lon, ST_Y(geom) as lat,
+               date_creation, user_id
+        FROM projets
+        WHERE id = :id
+    """)
+    result = await db.execute(query, {"id": projet_id})
+    row = result.mappings().first()
+    if not row:
+        raise HTTPException(status_code=404, detail="Projet non trouve")
+
+    # Ownership check
+    if row["user_id"] and user and str(row["user_id"]) != str(user.id) and getattr(user, 'tier', '') != 'admin':
+        raise HTTPException(status_code=403, detail="Access denied")
+
+    return _serialize_projet(dict(row))
+
+
 # ─── CRUD ───
 
 
 @router.post("/projets", status_code=201)
-async def create_projet(body: ProjetCreate, db: AsyncSession = Depends(get_db)):
+async def create_projet(
+    body: ProjetCreate,
+    db: AsyncSession = Depends(get_db),
+    user: Optional[User] = Depends(get_current_user),
+):
     """Create a new project."""
     projet_id = str(uuid.uuid4())
     geom_sql = "ST_SetSRID(ST_MakePoint(:lon, :lat), 4326)" if body.lon and body.lat else "NULL"
 
     query = text(f"""
         INSERT INTO projets (id, nom, filiere, puissance_mwc, surface_ha,
-                            commune, departement, region, statut, geom)
+                            commune, departement, region, statut, geom, user_id)
         VALUES (:id, :nom, :filiere, :puissance_mwc, :surface_ha,
-                :commune, :departement, :region, :statut, {geom_sql})
+                :commune, :departement, :region, :statut, {geom_sql}, :user_id)
         RETURNING id
     """)
     params = {
@@ -469,6 +508,7 @@ async def create_projet(body: ProjetCreate, db: AsyncSession = Depends(get_db)):
         "departement": body.departement,
         "region": body.region,
         "statut": body.statut,
+        "user_id": str(user.id) if user else None,
     }
     if body.lon and body.lat:
         params["lon"] = body.lon
@@ -484,20 +524,28 @@ async def create_projet(body: ProjetCreate, db: AsyncSession = Depends(get_db)):
     )
 
     # Return the created project
-    return await get_projet(projet_id, db)
+    return await get_projet(projet_id, db, user)
 
 
 @router.put("/projets/{projet_id}")
 async def update_projet(
-    projet_id: str, body: ProjetUpdate, db: AsyncSession = Depends(get_db)
+    projet_id: str,
+    body: ProjetUpdate,
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(require_user),
 ):
     """Update an existing project."""
     # Verify exists
     check = await db.execute(
-        text("SELECT id FROM projets WHERE id = :id"), {"id": projet_id}
+        text("SELECT id, user_id FROM projets WHERE id = :id"), {"id": projet_id}
     )
-    if not check.first():
+    row = check.mappings().first()
+    if not row:
         raise HTTPException(status_code=404, detail="Projet non trouve")
+
+    # Ownership check
+    if row["user_id"] and user and str(row["user_id"]) != str(user.id) and getattr(user, 'tier', '') != 'admin':
+        raise HTTPException(status_code=403, detail="Access denied")
 
     # Build dynamic SET clause
     updates = []
@@ -522,7 +570,7 @@ async def update_projet(
         params[field] = value
 
     if not updates:
-        return await get_projet(projet_id, db)
+        return await get_projet(projet_id, db, user)
 
     set_clause = ", ".join(updates)
     query = text(f"UPDATE projets SET {set_clause} WHERE id = :id")
@@ -535,7 +583,7 @@ async def update_projet(
         entity_type="projet", entity_id=projet_id,
     )
 
-    return await get_projet(projet_id, db)
+    return await get_projet(projet_id, db, user)
 
 
 @router.put("/projets/{projet_id}/phases/{bloc_code}")
@@ -544,6 +592,7 @@ async def update_phase_completion(
     bloc_code: str,
     completion_pct: int = Query(..., ge=0, le=100),
     db: AsyncSession = Depends(get_db),
+    user: User = Depends(require_user),
 ):
     """Update the completion percentage for a bloc (B1-B8) on a project.
 
@@ -590,14 +639,23 @@ async def update_phase_completion(
 
 
 @router.delete("/projets/{projet_id}")
-async def delete_projet(projet_id: str, db: AsyncSession = Depends(get_db)):
+async def delete_projet(
+    projet_id: str,
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(require_user),
+):
     """Delete a project and its associated data."""
     # Verify exists
     check = await db.execute(
-        text("SELECT id FROM projets WHERE id = :id"), {"id": projet_id}
+        text("SELECT id, user_id FROM projets WHERE id = :id"), {"id": projet_id}
     )
-    if not check.first():
+    row = check.mappings().first()
+    if not row:
         raise HTTPException(status_code=404, detail="Projet non trouve")
+
+    # Ownership check
+    if row["user_id"] and user and str(row["user_id"]) != str(user.id) and getattr(user, 'tier', '') != 'admin':
+        raise HTTPException(status_code=403, detail="Access denied")
 
     # Delete related data first
     await db.execute(
@@ -633,6 +691,7 @@ async def delete_projet(projet_id: str, db: AsyncSession = Depends(get_db)):
 async def import_projets(
     file: UploadFile = File(...),
     db: AsyncSession = Depends(get_db),
+    user: User = Depends(require_user),
 ):
     """Import projects from CSV (semicolon-separated) or JSON file.
 

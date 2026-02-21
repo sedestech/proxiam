@@ -1,3 +1,7 @@
+from app.models.user import User
+from app.models.usage_log import UsageLog
+from app.models.scraped_content import ScrapedContent
+from app.models.user_watch import UserWatch, Alert
 from app.models.phase import Bloc, Phase
 from app.models.livrable import Livrable
 from app.models.norme import Norme
@@ -21,6 +25,11 @@ from app.models.relations import (
 )
 
 __all__ = [
+    "User",
+    "UsageLog",
+    "ScrapedContent",
+    "UserWatch",
+    "Alert",
     "Bloc",
     "Phase",
     "Livrable",

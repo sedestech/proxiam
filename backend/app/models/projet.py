@@ -1,8 +1,9 @@
 import uuid
 
 from geoalchemy2 import Geometry
-from sqlalchemy import Column, Integer, String, Text, Numeric, ForeignKey, BigInteger, DateTime
+from sqlalchemy import Boolean, Column, Integer, String, Text, Numeric, ForeignKey, BigInteger, DateTime
 from sqlalchemy.dialects.postgresql import UUID, JSONB
+from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
 
 from app.database import Base
@@ -14,6 +15,8 @@ class Projet(Base):
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     nom = Column(Text, nullable=False)
     filiere = Column(String(50))  # 'solaire_sol','eolien_onshore','bess'
+    # Multi-tenant: nullable for migration from existing data
+    user_id = Column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=True, index=True)
     puissance_mwc = Column(Numeric)
     surface_ha = Column(Numeric)
     geom = Column(Geometry("POINT", srid=4326))
@@ -26,6 +29,9 @@ class Projet(Base):
     score_global = Column(Integer)  # 0-100
     date_creation = Column(DateTime(timezone=True), server_default=func.now())
     metadata_ = Column("metadata", JSONB, default={})
+
+    # Relationships
+    user = relationship("User", back_populates="projets")
 
 
 class ProjetPhase(Base):

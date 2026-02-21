@@ -1,5 +1,61 @@
 # Décisions Techniques — Proxiam
 
+## 2026-02-21 : MobileNav avec menu extensible "Plus" (pas 5+ items en bottom nav)
+
+**Quoi** : Le MobileNav affiche 4 items principaux (Dashboard, Map, Projects, Veille) + un bouton "Plus" qui ouvre une grille flottante avec les 6 pages secondaires.
+
+**Pourquoi** : Avec 10+ pages, une bottom nav classique deviendrait illisible. Le pattern "4 + More" est utilisé par Instagram, Spotify, etc. Les 4 items choisis sont les plus utilisés quotidiennement. Le menu "Plus" évite de scroller horizontalement.
+
+**Alternatives rejetées** :
+- Hamburger menu : cache la navigation, mauvais pour la découvrabilité
+- Scroll horizontal : les items hors écran sont oubliés
+- 5 items en nav : trop serré sur iPhone SE (320px)
+
+## 2026-02-21 : Clerk conditional import avec await import() (pas de require)
+
+**Quoi** : Le SDK Clerk est importé dynamiquement via `await import("@clerk/clerk-react")` dans un try/catch, au lieu d'un import statique ou d'un require().
+
+**Pourquoi** : Permet au frontend de fonctionner en mode dev sans Clerk installé/configuré. `require()` ne fonctionne pas dans un environnement Vite ESM. L'import dynamique avec try/catch est le pattern recommandé pour les dépendances optionnelles dans Vite.
+
+## 2026-02-21 : APScheduler in-process (pas Celery/Redis queue)
+
+**Quoi** : Le scheduler de scraping/analyse utilise APScheduler AsyncIOScheduler intégré au process FastAPI, pas une queue Celery externe.
+
+**Pourquoi** : Sur un VPS 8 GB RAM, lancer un worker Celery + Redis broker séparé consommerait ~500 MB supplémentaires. APScheduler s'exécute dans le même process uvicorn, partage la connexion DB, et suffit pour 3 jobs cron (scrape, analyze, cleanup). Le scale-up vers Celery est possible plus tard si nécessaire.
+
+**Alternatives rejetées** :
+- Celery + Redis : overhead mémoire + complexité opérationnelle pour 3 jobs
+- Crontab système : pas de visibilité dans l'app, pas de gestion d'erreur intégrée
+- asyncio.sleep loop : fragile, pas de persistance des horaires
+
+## 2026-02-21 : SHA256 change detection pour scraping (pas de re-analyse systématique)
+
+**Quoi** : Chaque contenu scrapé est hashé (SHA256). L'analyse IA n'est relancée que si le hash change. Si le contenu est identique, seul `last_checked` est mis à jour.
+
+**Pourquoi** : ~70% des sources ne changent pas entre deux scrapes. Sans change detection, on gaspillerait ~70% des tokens Claude API. Avec Haiku 4.5 à $1/$5 par MTok et ~500 sources, ça représente ~$4/mois d'économie. Le SHA256 est quasi-gratuit en CPU.
+
+## 2026-02-21 : Claude Haiku 4.5 pour batch analyse (pas Sonnet/Opus)
+
+**Quoi** : L'analyseur batch nocturne utilise Claude Haiku 4.5 (`claude-haiku-4-5-20251001`) avec max_tokens=500 et contenu tronqué à 4000 chars.
+
+**Pourquoi** : Haiku 4.5 coûte $1/$5 par MTok vs $3/$15 pour Sonnet, soit ~80% d'économie. Pour du résumé structuré + extraction de tags, Haiku suffit largement. Avec le batch API d'Anthropic (-50% supplémentaire) le coût tombe à ~$0.50/$2.50 par MTok.
+
+**Alternatives rejetées** :
+- Sonnet 4.5 : 3x plus cher, qualité marginalement meilleure pour du résumé
+- GPT-4o-mini : moins cher mais nécessite un second SDK + clé API
+
+## 2026-02-21 : Clerk JWT auth avec JWKS cache (pas de secret partagé)
+
+**Quoi** : Le backend valide les JWT Clerk en récupérant les clés publiques JWKS depuis `https://{CLERK_DOMAIN}/.well-known/jwks.json` avec cache 1h, au lieu d'un secret partagé.
+
+**Pourquoi** : La validation asymétrique (RS256) est plus sécurisée qu'un secret partagé (HS256). Le cache JWKS évite un appel réseau à chaque requête. Le TTL de 1h est un bon compromis entre fraîcheur des clés et performance.
+
+## 2026-02-21 : Tier limits en mémoire + comptage SQL (pas Redis)
+
+**Quoi** : Les limites par forfait (TIER_LIMITS dict) sont en mémoire Python. Le comptage des actions du jour est fait via `SELECT COUNT(*) FROM usage_logs WHERE date = today`.
+
+**Pourquoi** : Avec <100 users initialement, une requête SQL par vérification de quota est acceptable (<1ms). Redis ajouterait de la complexité pour un gain marginal. Le passage à Redis (INCR atomique) est trivial si le volume augmente.
+
 ## 2026-02-21 : Batch scoring avec validation Pydantic stricte (pas de cap runtime)
 
 **Quoi** : L'endpoint `POST /api/projets/batch-score` valide les entrees via Pydantic (`min_length=1`, `max_length=20`, `field_validator` anti-doublons) plutot qu'un simple slice `[:20]` a l'execution.

@@ -1,5 +1,181 @@
 # Changelog — Proxiam OS ENR
 
+## [1.9.0] — 2026-02-21 — Sprint 18b : Mobile-First Polish
+
+### Amélioré
+- **MobileNav redesign** : 4 items principaux + bouton "Plus" extensible (grille 3 colonnes avec Knowledge, 3D, Canvas, Scoring, Admin, Settings)
+- **Touch targets 44px** : tous les boutons interactifs respectent les guidelines Apple/Material (min 44x44px)
+- **Admin responsive** : onglets scrollables, vue cards mobile pour la table utilisateurs, KPIs en grille 2 colonnes
+- **Veille responsive** : filtres empilés sur mobile, boutons action agrandis (h-9 w-9), items sources en 2 lignes
+- **AlertBell responsive** : dropdown `w-[calc(100vw-2rem)]` sur mobile, max-height viewport-based `max-h-[60vh]`
+- **Header responsive** : boutons action 40px, espacement compact sur mobile
+- **Dashboard responsive** : KPI cards padding compact (p-3), liens projet 48px touch area
+- **CSS utilities** : `scrollbar-hide`, `safe-area-inset-bottom`, `animate-fade-in`
+
+### Corrigé
+- **Sidebar ESM** : migration `require()` → `await import()` pour compatibilité Vite ESM
+
+### i18n
+- 2 clés FR/EN ajoutées : `nav.more`, `nav.morePages`
+
+---
+
+## [1.8.0] — 2026-02-21 — Sprint 18 : Veille Active Bloomberg-Quality
+
+### Ajouté
+- **Scrapers mutualisés** : architecture BaseScraper + RssScraper + ApiScraper + HtmlScraper
+  - SHA256 change detection (analyse IA uniquement si contenu modifié)
+  - Concurrence asyncio.Semaphore(5) max 5 sources en parallèle
+  - Retry avec backoff (3 tentatives)
+- **Orchestrateur scraping** : dispatch automatique source → scraper selon `type_source`
+  - Stockage `scraped_contents` avec hash, résumé IA, tags IA
+  - Déclenchement matching alertes après scraping
+- **Scheduler APScheduler** : 3 jobs cron async
+  - `scrape_all` : 02:00 quotidien
+  - `batch_analyze` : 03:00 quotidien (Claude Haiku 4.5 batch)
+  - `cleanup_logs` : lundi 04:00 (nettoyage logs > 90 jours)
+- **Batch analyzer** : analyse IA nocturne des contenus scrapés
+  - Claude Haiku 4.5 ($1/$5 par MTok) — contenu tronqué 4000 chars
+  - Résumé structuré + tags + impact ENR en JSON
+  - Log UsageLog pour tracking coûts admin
+- **Système alertes** : UserWatch (source/keyword/zone_geo/filière) + Alert
+  - `alert_matcher.py` : matching keyword (ILIKE), source_id, filière, zone géo
+  - Alertes créées automatiquement quand contenu matché
+- **Routes veille** : 8 endpoints
+  - `GET /api/veille/latest` : contenus scrapés paginés
+  - `GET /api/veille/search?q=` : recherche dans contenus
+  - `GET /api/alerts` : alertes utilisateur (auth)
+  - `PATCH /api/alerts/{id}/read` : marquer alerte lue
+  - `GET /api/watches` : veilles actives
+  - `POST /api/watches` : créer une veille
+  - `DELETE /api/watches/{id}` : supprimer une veille
+  - `GET/POST /api/admin/scraping/*` : monitoring + déclenchement manuel
+- **Frontend AlertBell** : icône cloche avec badge compteur dans Header + dropdown alertes
+- **Frontend Veille** : page mise à jour avec contenus scrapés réels, filtres, bouton "Surveiller"
+
+### Tests
+- Backend : +25 tests (scrapers, batch_analyzer, alerts, scheduler)
+- Frontend : +10 tests (AlertBell, Veille)
+
+### i18n
+- Clés veille/alertes FR/EN ajoutées
+
+---
+
+## [1.7.0] — 2026-02-21 — Sprint 17 : Auth Clerk + Multi-tenant SaaS + Admin Dashboard
+
+### Ajouté
+- **Auth Clerk JWT** : middleware backend avec JWKS cache (1h TTL)
+  - `get_current_user` (optionnel), `require_user` (401), `require_admin` (403)
+  - Upsert automatique User au premier login (clerk_id → User)
+  - Decode RS256 avec `python-jose[cryptography]`
+- **Modèles multi-tenant** :
+  - `User` : clerk_id, email, nom, tier (free/pro/admin), active, last_login
+  - `UsageLog` : action, tokens_in/out, cost_eur par utilisateur
+  - `Projet.user_id` : FK vers User (filtrage par propriétaire)
+- **Tier limits** : quotas par forfait
+  - Free : 3 projets, 5 enrichissements/jour, 10 IA/jour, pas de PDF/batch
+  - Pro : 50 projets, 100 enrichissements/jour, 200 IA/jour, PDF + batch
+  - Admin : illimité
+  - `check_quota()` + `log_usage()` avec comptage journalier
+- **Routes admin** : 5 endpoints
+  - `GET /api/admin/users` : liste utilisateurs + tier + last_login
+  - `PATCH /api/admin/users/{id}` : modifier tier/active
+  - `GET /api/admin/usage` : consommation globale (tokens, coûts, par action)
+  - `GET /api/admin/usage/{user_id}` : consommation par utilisateur
+  - `GET /api/admin/stats` : stats plateforme (nb users, projets, enrichments)
+- **Frontend Clerk** :
+  - `<ClerkProvider>` wrapper conditionnel (graceful fallback dev sans Clerk)
+  - `<ProtectedRoute>` : redirect `/sign-in` si non connecté
+  - `<SignIn>` page avec composant Clerk
+  - `<UserButton>` dans Sidebar avec avatar + menu déconnexion
+  - Token Bearer via `useAuth().getToken()` dans api.ts
+- **Admin dashboard** : 4 onglets (overview/users/usage/services)
+  - Tableau utilisateurs avec modification tier inline
+  - Graphiques consommation tokens/coûts (Recharts)
+  - Section monitoring scraping
+
+### Tests
+- Backend : +20 tests (auth JWT, tier_limits, admin routes)
+- Frontend : +10 tests (Admin dashboard, ProtectedRoute)
+
+### i18n
+- Clés auth/admin FR/EN ajoutées
+
+---
+
+## [1.6.0] — 2026-02-21 — Sprint 16 : Comparaison Projets + Dashboard Top 5 + Alertes Mock
+
+### Ajouté
+- **Comparaison multi-projets** : `GET /api/projets/compare?ids=` (max 5 projets)
+  - Radar chart superposé (Recharts), tableau comparatif, export CSV
+  - `GET /api/projets/compare/export?ids=` : export CSV formaté
+- **Dashboard Top 5** : widget classement par score des meilleurs projets
+  - Navigation directe vers fiche projet
+- **Alertes mock** : prototype widget alertes récentes sur Dashboard
+
+### Tests
+- Backend : +15 tests comparaison + export CSV
+- Frontend : +12 tests UI comparaison
+
+---
+
+## [1.5.0] — 2026-02-21 — Sprint 15 : Estimation Financière + PDF
+
+### Ajouté
+- **Estimation financière** : `GET /api/projets/{id}/financial`
+  - CAPEX/OPEX par filière (solaire, éolien, BESS) avec coefficients réalistes
+  - LCOE (Levelized Cost of Energy) calculé
+  - TRI (Taux de Rendement Interne) sur 20-25 ans
+  - VAN (Valeur Actuelle Nette) avec taux d'actualisation configurable
+- **Génération PDF** : `POST /api/projets/{id}/report`
+  - Rapport complet : fiche projet, scoring, réglementaire, financier
+  - fpdf2 avec mise en page professionnelle, graphiques intégrés
+  - Téléchargement direct (Content-Disposition attachment)
+
+### Tests
+- Backend : +18 tests estimation financière + génération PDF
+- Frontend : +8 tests bouton export PDF
+
+---
+
+## [1.4.0] — 2026-02-21 — Sprint 14 : Analyse Réglementaire Auto + Expert IA
+
+### Ajouté
+- **Analyse réglementaire** : `GET /api/projets/{id}/regulatory`
+  - Matching automatique normes/contraintes selon localisation et filière
+  - Score conformité par catégorie (urbanisme, environnement, réseau)
+  - Recommandations IA contextualisées
+- **Expert consultant IA** : assistant Claude spécialisé ENR
+  - Analyse documentaire automatisée
+  - Contexte projet injecté dans le prompt
+
+### Tests
+- Backend : +15 tests analyse réglementaire
+- Frontend : +10 tests affichage contraintes
+
+---
+
+## [1.3.0] — 2026-02-21 — Sprint 13 : Enrichissement PVGIS + Contraintes + Scoring Réel
+
+### Ajouté
+- **Enrichissement PVGIS** : `POST /api/projets/{id}/enrich`
+  - Appel API PVGIS (Commission Européenne) pour irradiance solaire
+  - Données mensuelles GHI, DNI, température
+  - Batch enrichissement : `POST /api/projets/batch-enrich`
+- **Contraintes géographiques** : détection automatique
+  - Zones Natura 2000, ZNIEFF, monuments historiques
+  - Distances postes sources, axes routiers
+- **Scoring réel** : algorithme 0-100 basé sur données enrichies
+  - Pondération dynamique par filière
+  - 6 critères : irradiance, réseau, contraintes, terrain, réglementaire, accès
+
+### Tests
+- Backend : +20 tests enrichissement + contraintes
+- Frontend : +15 tests affichage données enrichies
+
+---
+
 ## [1.3.0] — 2026-02-21 — Sprint 12 : Batch Scoring, Score Filters, Security, Benchmark
 
 ### Ajoute

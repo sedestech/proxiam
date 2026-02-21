@@ -90,18 +90,18 @@ function KpiCard({
   color: string;
 }) {
   return (
-    <div className="card group flex items-center gap-4">
+    <div className="card group flex items-center gap-3 p-3 sm:gap-4 sm:p-5">
       <div
-        className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg"
+        className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg sm:h-10 sm:w-10"
         style={{ backgroundColor: `${color}15` }}
       >
-        <Icon className="h-5 w-5" style={{ color }} />
+        <Icon className="h-4.5 w-4.5 sm:h-5 sm:w-5" style={{ color }} />
       </div>
-      <div>
-        <p className="text-2xl font-bold tracking-tight text-slate-900 dark:text-white">
+      <div className="min-w-0">
+        <p className="text-xl font-bold tracking-tight text-slate-900 dark:text-white sm:text-2xl">
           {value}
         </p>
-        <p className="text-sm text-slate-500 dark:text-slate-400">{label}</p>
+        <p className="truncate text-xs text-slate-500 dark:text-slate-400 sm:text-sm">{label}</p>
       </div>
     </div>
   );
@@ -363,7 +363,7 @@ export default function Dashboard() {
               <Link
                 key={p.id}
                 to={`/projects/${p.id}`}
-                className="flex items-center gap-3 rounded-lg px-2 py-1.5 hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors"
+                className="flex items-center gap-3 rounded-lg px-2 py-2.5 hover:bg-slate-50 active:bg-slate-100 dark:hover:bg-slate-700 transition-colors min-h-[48px]"
               >
                 {filiereIcon(p.filiere)}
                 <div className="flex-1 min-w-0">
@@ -433,7 +433,7 @@ export default function Dashboard() {
                   const ids = topProjects.map((p) => p.id).join(",");
                   navigate(`/compare?ids=${ids}`);
                 }}
-                className="flex items-center gap-1 rounded-md border border-indigo-200 bg-indigo-50 px-2 py-1 text-xs font-medium text-indigo-600 hover:bg-indigo-100 dark:border-indigo-700 dark:bg-indigo-900/30 dark:text-indigo-400"
+                className="flex items-center gap-1 rounded-lg border border-indigo-200 bg-indigo-50 px-3 py-2 text-xs font-medium text-indigo-600 hover:bg-indigo-100 active:bg-indigo-200 dark:border-indigo-700 dark:bg-indigo-900/30 dark:text-indigo-400 min-h-[36px]"
               >
                 <GitCompareArrows className="h-3 w-3" />
                 {t("dashboard.compareAll")}
@@ -446,7 +446,7 @@ export default function Dashboard() {
               <Link
                 key={p.id}
                 to={`/projects/${p.id}`}
-                className="flex items-center gap-3 rounded-lg px-2 py-1.5 hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors"
+                className="flex items-center gap-3 rounded-lg px-2 py-2.5 hover:bg-slate-50 active:bg-slate-100 dark:hover:bg-slate-700 transition-colors min-h-[48px]"
               >
                 <span className={`flex h-5 w-5 items-center justify-center rounded-full text-[10px] font-bold ${
                   i === 0 ? "bg-amber-100 text-amber-700" :
@@ -495,7 +495,7 @@ export default function Dashboard() {
           <div className="space-y-2">
             {analytics?.recent_activity && analytics.recent_activity.length > 0 ? (
               analytics.recent_activity.slice(0, 5).map((a, i) => (
-                <div key={i} className="flex items-start gap-2.5 rounded-lg border border-slate-100 px-3 py-2 dark:border-slate-700">
+                <div key={i} className="flex items-start gap-2.5 rounded-lg border border-slate-100 px-3 py-2.5 dark:border-slate-700">
                   <div className={`mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full ${
                     a.type === "score_calculated" ? "bg-blue-100" :
                     a.type === "project_created" ? "bg-emerald-100" :

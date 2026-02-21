@@ -2,7 +2,9 @@
 
 ## Projet
 
-**Proxiam** est un Operating System de connaissance pour les actifs ENR (énergie renouvelable) en France. Il intègre 3 piliers visuels (Cartographie SIG, Knowledge Graph 6D, Visualisation 3D) et un moteur IA.
+**Proxiam** est un Operating System complet pour les actifs ENR (énergie renouvelable) en France. C'est une plateforme d'action, de réflexion, de configuration, de test et de formation pour TOUS les métiers ENR : prospecteur, juriste, ingénieur études solaire, foncier, environnemental, génie électrique SCADA, grid, batterie, génie civil, géophysique, construction, maintenance, intervention, performance, suivi de dossier, gestionnaire de centrale, optimisation financière, qualité fournisseur, qualité matériel, R&D.
+
+Il intègre 3 piliers visuels (Cartographie SIG, Knowledge Graph 6D, Visualisation 3D), un moteur IA, une veille qualité Bloomberg/Palantir, et un système multi-tenant SaaS.
 
 ## Architecture
 
@@ -78,7 +80,7 @@ PYTHONPATH=. python3 -m app.seed.import_data
 | Cache | Redis 7 |
 | Search | Meilisearch v1.12 |
 | Storage | MinIO (S3) |
-| Auth | Clerk (Sprint 6) |
+| Auth | Clerk (Sprint 17) |
 | AI | Anthropic Claude API |
 | PDF | fpdf2 (génération rapports) |
 | i18n | i18next (FR/EN) |
@@ -112,6 +114,20 @@ PYTHONPATH=. python3 -m app.seed.import_data
 | `GET /api/projets/compare/export?ids=` | Export CSV comparaison |
 | `GET /api/knowledge/graph` | Knowledge Graph (nodes+edges pour React Flow) |
 | `GET /api/search?q=` | Recherche globale (Meilisearch, 5167 docs, 7 index) |
+| `GET /api/admin/users` | Liste utilisateurs (admin) |
+| `PATCH /api/admin/users/{id}` | Modifier tier/active (admin) |
+| `GET /api/admin/usage` | Consommation globale (admin) |
+| `GET /api/admin/usage/{user_id}` | Consommation par utilisateur (admin) |
+| `GET /api/admin/stats` | Stats plateforme (admin) |
+| `GET /api/veille/latest` | Derniers contenus scrapes |
+| `GET /api/veille/search?q=` | Recherche contenus scrapes |
+| `GET /api/alerts` | Alertes utilisateur (auth) |
+| `PATCH /api/alerts/{id}/read` | Marquer alerte lue (auth) |
+| `GET /api/watches` | Mes veilles actives (auth) |
+| `POST /api/watches` | Creer une veille (auth) |
+| `DELETE /api/watches/{id}` | Supprimer une veille (auth) |
+| `GET /api/admin/scraping/status` | Statut scraping (admin) |
+| `POST /api/admin/scraping/run` | Lancer scraping manuel (admin) |
 | Swagger | `GET /api/docs` |
 
 ## Data Model — Matrice 6D
@@ -136,7 +152,7 @@ Postes Sources (4847) ← infrastructure réseau géolocalisée
 - **Phases** : P0 blue, P1 violet, P2 emerald, P3 teal, P4 amber, P5 pink, P6 indigo, P7 slate
 - **Typo** : Inter (corps), JetBrains Mono (données)
 - **Icons** : Lucide React
-- **Mobile** : Bottom nav + gestes carte natifs
+- **Mobile** : Bottom nav + "Plus" expandable menu + gestes carte natifs + 44px min touch targets
 - **Animations** : ease-out, jamais de bounce
 
 ## Sécurité
@@ -180,8 +196,14 @@ cd frontend && npm run test:coverage    # Couverture
 - **Sprint 14** : Analyse réglementaire auto + expert consultant IA ✓
 - **Sprint 15** : Estimation financière CAPEX/OPEX/LCOE/TRI + PDF ✓
 - **Sprint 16** : Comparaison projets + Dashboard Top 5 + alertes ✓
-- **Sprint 17** : Auth Clerk + déploiement VPS (a venir)
-- **Sprint 18** : Veille active (cron scraping) + alertes temps réel (a venir)
+- **Sprint 17** : Auth Clerk + Multi-tenant SaaS + Admin dashboard ✓
+- **Sprint 18** : Veille active Bloomberg-quality (scrapers + IA batch + alertes) ✓
+- **Sprint 18b** : Mobile-first polish (MobileNav redesign, touch targets 44px, responsive tables/cards) ✓
+- **Sprint 18c** : Security hardening (CVE python-jose→PyJWT, auth on all write endpoints, SSRF protection, ownership checks) ✓
+- **Sprint 19** : Data lifecycle + Natura2000 + Alembic migrations + Stripe billing (priorité)
+- **Sprint 20** : Tests E2E Playwright + UX onboarding wizard + cross-pillar deep links
+- **Sprint 21** : Import GeoJSON + couches cartographiques enrichies + Data Health dashboard admin
+- **Sprint 22** : Déploiement VPS + CI/CD + monitoring (16GB RAM recommandé)
 
 ## GitHub
 

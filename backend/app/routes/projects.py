@@ -1,10 +1,11 @@
-"""Projects API routes — Sprint 4+6+7.
+"""Projects API routes — Sprint 4+6+7+16.
 
 Returns project data with proper serialization (UUID, Geometry, Decimal).
-Includes phase progression, stats, filters, CSV export, and CRUD operations.
+Includes phase progression, stats, filters, CSV export, comparison, and CRUD.
 """
 import csv
 import io
+import json
 import uuid
 from typing import Optional
 
@@ -17,6 +18,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.database import get_db
 from app.models import Projet
 from app.routes.notifications import create_notification
+from app.services.financial import estimate_financial
+from app.services.regulatory import analyze_regulatory
 
 router = APIRouter()
 
@@ -308,6 +311,135 @@ async def export_projets_csv(db: AsyncSession = Depends(get_db)):
         iter([output.getvalue()]),
         media_type="text/csv",
         headers={"Content-Disposition": "attachment; filename=proxiam-projets.csv"},
+    )
+
+
+# ─── Compare ───
+
+
+@router.get("/projets/compare")
+async def compare_projects(
+    ids: str = Query(..., description="Comma-separated project IDs (max 10)"),
+    db: AsyncSession = Depends(get_db),
+):
+    """Compare multiple projects side-by-side.
+
+    Returns enrichment, financial, regulatory, and score data for each project.
+    Max 10 projects per comparison.
+    """
+    projet_ids = [pid.strip() for pid in ids.split(",") if pid.strip()]
+    if len(projet_ids) > 10:
+        raise HTTPException(status_code=400, detail="Maximum 10 projets pour la comparaison")
+    if len(projet_ids) < 2:
+        raise HTTPException(status_code=400, detail="Minimum 2 projets pour la comparaison")
+
+    projects = []
+    for pid in projet_ids:
+        query = text("""
+            SELECT id, nom, filiere, puissance_mwc, surface_ha,
+                   commune, departement, region, statut, score_global,
+                   ST_X(geom) as lon, ST_Y(geom) as lat, metadata
+            FROM projets WHERE id = :id
+        """)
+        result = await db.execute(query, {"id": pid})
+        row = result.mappings().first()
+        if not row:
+            continue
+
+        filiere = row["filiere"] or "solaire_sol"
+        puissance = float(row["puissance_mwc"]) if row["puissance_mwc"] else 1.0
+        surface = float(row["surface_ha"]) if row["surface_ha"] else None
+        metadata = row["metadata"] if row["metadata"] else {}
+        if isinstance(metadata, str):
+            metadata = json.loads(metadata)
+        enrichment_data = metadata.get("enrichment")
+
+        # Financial estimation
+        financial = estimate_financial(
+            filiere=filiere, puissance_mwc=puissance,
+            surface_ha=surface, enrichment_data=enrichment_data,
+        )
+
+        # Regulatory analysis
+        regulatory = analyze_regulatory(
+            filiere=filiere, puissance_mwc=puissance,
+            surface_ha=surface, enrichment_data=enrichment_data,
+        )
+
+        # Extract key enrichment metrics
+        pvgis = enrichment_data.get("pvgis", {}) if enrichment_data else {}
+        postes = enrichment_data.get("nearest_postes", []) if enrichment_data else []
+        constraints = enrichment_data.get("constraints", {}) if enrichment_data else {}
+
+        projects.append({
+            "id": str(row["id"]),
+            "nom": row["nom"],
+            "filiere": filiere,
+            "puissance_mwc": puissance,
+            "surface_ha": surface,
+            "commune": row["commune"],
+            "departement": row["departement"],
+            "statut": row["statut"],
+            "score_global": row["score_global"],
+            "enriched": enrichment_data is not None,
+            # Enrichment
+            "ghi_kwh_m2_an": pvgis.get("ghi_kwh_m2_an"),
+            "productible_kwh_kwc_an": pvgis.get("productible_kwh_kwc_an"),
+            "distance_poste_km": postes[0]["distance_km"] if postes else None,
+            "constraints_count": constraints.get("summary", {}).get("total_constraints", 0),
+            # Financial
+            "capex_total_eur": financial["capex"]["total_eur"],
+            "capex_eur_kwc": financial["capex"]["eur_par_kwc"],
+            "opex_annuel_eur": financial["opex"]["annuel_eur"],
+            "revenu_annuel_eur": financial["revenus"]["annuel_eur"],
+            "lcoe_eur_mwh": financial["lcoe_eur_mwh"],
+            "tri_pct": financial["tri"]["tri_pct"],
+            "payback_years": financial["tri"]["payback_years"],
+            "rentable": financial["tri"]["rentable"],
+            # Regulatory
+            "risk_level": regulatory["risk_level"],
+            "nb_obligations": regulatory["nb_obligations"],
+            "delai_max_mois": regulatory["estimated_delai_max_mois"],
+        })
+
+    return {"count": len(projects), "projects": projects}
+
+
+@router.get("/projets/compare/export")
+async def export_compare_csv(
+    ids: str = Query(..., description="Comma-separated project IDs"),
+    db: AsyncSession = Depends(get_db),
+):
+    """Export comparison data as CSV."""
+    compare_data = await compare_projects(ids=ids, db=db)
+
+    output = io.StringIO()
+    writer = csv.writer(output, delimiter=";")
+    writer.writerow([
+        "Nom", "Filiere", "MWc", "Commune", "Score",
+        "GHI (kWh/m2)", "Productible (kWh/kWc)", "Dist. poste (km)", "Contraintes",
+        "CAPEX (EUR)", "CAPEX (EUR/kWc)", "OPEX/an (EUR)", "Revenu/an (EUR)",
+        "LCOE (EUR/MWh)", "TRI (%)", "Payback (ans)", "Rentable",
+        "Risque reglem.", "Obligations", "Delai max (mois)",
+    ])
+    for p in compare_data["projects"]:
+        writer.writerow([
+            p["nom"], p["filiere"], p["puissance_mwc"],
+            p["commune"] or "", p["score_global"] or "",
+            p["ghi_kwh_m2_an"] or "", p["productible_kwh_kwc_an"] or "",
+            p["distance_poste_km"] or "", p["constraints_count"],
+            p["capex_total_eur"], p["capex_eur_kwc"],
+            p["opex_annuel_eur"], p["revenu_annuel_eur"],
+            p["lcoe_eur_mwh"], p["tri_pct"],
+            p["payback_years"] or "", "Oui" if p["rentable"] else "Non",
+            p["risk_level"], p["nb_obligations"], p["delai_max_mois"],
+        ])
+
+    output.seek(0)
+    return StreamingResponse(
+        iter([output.getvalue()]),
+        media_type="text/csv",
+        headers={"Content-Disposition": "attachment; filename=proxiam-comparaison.csv"},
     )
 
 

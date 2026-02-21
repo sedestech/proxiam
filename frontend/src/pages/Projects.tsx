@@ -1,5 +1,5 @@
 import { useState, useMemo } from "react";
-import { Link, useSearchParams } from "react-router-dom";
+import { Link, useSearchParams, useNavigate } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
@@ -23,6 +23,7 @@ import {
   Target,
   Loader2,
   Leaf,
+  GitCompareArrows,
 } from "lucide-react";
 import api from "../lib/api";
 import ProjectForm from "../components/ProjectForm";
@@ -93,6 +94,7 @@ function statutBadge(statut: string) {
 
 export default function Projects() {
   const { t } = useTranslation();
+  const navigate = useNavigate();
   const queryClient = useQueryClient();
   const [searchParams, setSearchParams] = useSearchParams();
 
@@ -230,6 +232,20 @@ export default function Projects() {
                   Score ({selectedIds.size})
                 </span>
               </button>
+              {selectedIds.size >= 2 && (
+                <button
+                  onClick={() => {
+                    const ids = Array.from(selectedIds).join(",");
+                    navigate(`/compare?ids=${ids}`);
+                  }}
+                  className="flex items-center gap-2 rounded-lg bg-indigo-500 px-3 py-2 text-sm font-medium text-white hover:bg-indigo-600"
+                >
+                  <GitCompareArrows className="h-4 w-4" />
+                  <span className="hidden sm:inline">
+                    {t("compare.compare")} ({selectedIds.size})
+                  </span>
+                </button>
+              )}
             </>
           )}
           <button

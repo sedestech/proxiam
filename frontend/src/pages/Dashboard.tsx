@@ -23,6 +23,11 @@ import {
   Wind,
   Battery,
   Zap,
+  Trophy,
+  GitCompareArrows,
+  Bell,
+  CheckCircle,
+  Info,
 } from "lucide-react";
 import api from "../lib/api";
 
@@ -56,6 +61,7 @@ interface Projet {
   departement: string | null;
   statut: string;
   score_global: number | null;
+  metadata: Record<string, unknown> | null;
 }
 
 const STATUT_COLORS: Record<string, string> = {
@@ -147,6 +153,20 @@ export default function Dashboard() {
     queryFn: async () => {
       const res = await api.get("/api/projets/stats/analytics");
       return res.data;
+    },
+    staleTime: 60 * 1000,
+  });
+
+  // Top 5 scored projects
+  const { data: topProjects } = useQuery<Projet[]>({
+    queryKey: ["projets-top5"],
+    queryFn: async () => {
+      const res = await api.get("/api/projets?limit=50");
+      const all: Projet[] = res.data;
+      return all
+        .filter((p) => p.score_global !== null)
+        .sort((a, b) => (b.score_global ?? 0) - (a.score_global ?? 0))
+        .slice(0, 5);
     },
     staleTime: 60 * 1000,
   });
@@ -394,6 +414,118 @@ export default function Dashboard() {
                 </span>
               </div>
             ))}
+          </div>
+        </div>
+      </div>
+
+      {/* Top 5 Sites + Alerts */}
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+        {/* Top 5 scored sites */}
+        <div className="card">
+          <div className="mb-3 flex items-center justify-between">
+            <h2 className="flex items-center gap-2 text-sm font-medium text-slate-500 dark:text-slate-400">
+              <Trophy className="h-4 w-4 text-amber-500" />
+              {t("dashboard.top5Title")}
+            </h2>
+            {topProjects && topProjects.length >= 2 && (
+              <button
+                onClick={() => {
+                  const ids = topProjects.map((p) => p.id).join(",");
+                  navigate(`/compare?ids=${ids}`);
+                }}
+                className="flex items-center gap-1 rounded-md border border-indigo-200 bg-indigo-50 px-2 py-1 text-xs font-medium text-indigo-600 hover:bg-indigo-100 dark:border-indigo-700 dark:bg-indigo-900/30 dark:text-indigo-400"
+              >
+                <GitCompareArrows className="h-3 w-3" />
+                {t("dashboard.compareAll")}
+              </button>
+            )}
+          </div>
+          <p className="mb-2 text-[10px] text-slate-400">{t("dashboard.top5Subtitle")}</p>
+          <div className="space-y-1.5">
+            {topProjects?.map((p, i) => (
+              <Link
+                key={p.id}
+                to={`/projects/${p.id}`}
+                className="flex items-center gap-3 rounded-lg px-2 py-1.5 hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors"
+              >
+                <span className={`flex h-5 w-5 items-center justify-center rounded-full text-[10px] font-bold ${
+                  i === 0 ? "bg-amber-100 text-amber-700" :
+                  i === 1 ? "bg-slate-200 text-slate-600" :
+                  i === 2 ? "bg-orange-100 text-orange-700" :
+                  "bg-slate-100 text-slate-400"
+                }`}>
+                  {i + 1}
+                </span>
+                {filiereIcon(p.filiere)}
+                <div className="flex-1 min-w-0">
+                  <p className="truncate text-sm font-medium text-slate-900 dark:text-white">{p.nom}</p>
+                  <div className="flex items-center gap-1.5">
+                    <span className="text-[10px] text-slate-400">{p.puissance_mwc} MWc</span>
+                    {p.metadata?.enrichment ? (
+                      <span className="rounded-full bg-emerald-50 px-1.5 py-0 text-[9px] font-medium text-emerald-600">{t("dashboard.enriched")}</span>
+                    ) : (
+                      <span className="rounded-full bg-slate-100 px-1.5 py-0 text-[9px] text-slate-400">{t("dashboard.notEnriched")}</span>
+                    )}
+                  </div>
+                </div>
+                <span className={`font-mono text-sm font-bold ${
+                  (p.score_global ?? 0) >= 80 ? "text-emerald-600" :
+                  (p.score_global ?? 0) >= 60 ? "text-blue-600" :
+                  (p.score_global ?? 0) >= 40 ? "text-amber-600" :
+                  "text-red-500"
+                }`}>
+                  {p.score_global}
+                </span>
+              </Link>
+            ))}
+            {(!topProjects || topProjects.length === 0) && (
+              <p className="py-4 text-center text-xs text-slate-400">
+                Pas de projets scores
+              </p>
+            )}
+          </div>
+        </div>
+
+        {/* Alerts / Watch */}
+        <div className="card">
+          <h2 className="mb-3 flex items-center gap-2 text-sm font-medium text-slate-500 dark:text-slate-400">
+            <Bell className="h-4 w-4 text-indigo-500" />
+            {t("dashboard.alerts")}
+          </h2>
+          <div className="space-y-2">
+            {analytics?.recent_activity && analytics.recent_activity.length > 0 ? (
+              analytics.recent_activity.slice(0, 5).map((a, i) => (
+                <div key={i} className="flex items-start gap-2.5 rounded-lg border border-slate-100 px-3 py-2 dark:border-slate-700">
+                  <div className={`mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full ${
+                    a.type === "score_calculated" ? "bg-blue-100" :
+                    a.type === "project_created" ? "bg-emerald-100" :
+                    a.type === "import_completed" ? "bg-violet-100" :
+                    "bg-slate-100"
+                  }`}>
+                    {a.type === "score_calculated" ? (
+                      <TrendingUp className="h-3 w-3 text-blue-500" />
+                    ) : a.type === "project_created" ? (
+                      <CheckCircle className="h-3 w-3 text-emerald-500" />
+                    ) : (
+                      <Info className="h-3 w-3 text-slate-400" />
+                    )}
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="truncate text-xs font-medium text-slate-700 dark:text-slate-300">{a.title}</p>
+                    {a.timestamp && (
+                      <p className="text-[10px] text-slate-400">
+                        {new Date(a.timestamp).toLocaleString("fr-FR", { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" })}
+                      </p>
+                    )}
+                  </div>
+                </div>
+              ))
+            ) : (
+              <div className="flex flex-col items-center justify-center py-8 text-slate-400">
+                <Bell className="mb-2 h-8 w-8 text-slate-200" />
+                <p className="text-xs">{t("dashboard.noAlerts")}</p>
+              </div>
+            )}
           </div>
         </div>
       </div>

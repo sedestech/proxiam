@@ -7,6 +7,7 @@ from app.models.outil import Outil
 from app.models.competence import Competence
 from app.models.projet import Projet, ProjetPhase, ProjetRisque, ProjetDocument
 from app.models.poste_source import PosteSource
+from app.models.contrainte import Natura2000, Znieff
 from app.models.relations import (
     PhaseLivrable,
     PhaseNorme,
@@ -33,6 +34,8 @@ __all__ = [
     "ProjetRisque",
     "ProjetDocument",
     "PosteSource",
+    "Natura2000",
+    "Znieff",
     "PhaseLivrable",
     "PhaseNorme",
     "PhaseRisque",

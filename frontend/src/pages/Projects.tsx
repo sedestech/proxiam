@@ -22,6 +22,7 @@ import {
   Search,
   Target,
   Loader2,
+  Leaf,
 } from "lucide-react";
 import api from "../lib/api";
 import ProjectForm from "../components/ProjectForm";
@@ -114,6 +115,7 @@ export default function Projects() {
   }
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [batchScoring, setBatchScoring] = useState(false);
+  const [batchEnriching, setBatchEnriching] = useState(false);
   const [showForm, setShowForm] = useState(false);
   const [showImport, setShowImport] = useState(false);
   const [importFile, setImportFile] = useState<File | null>(null);
@@ -183,28 +185,52 @@ export default function Projects() {
         </div>
         <div className="flex items-center gap-2">
           {selectedIds.size > 0 && (
-            <button
-              disabled={batchScoring}
-              onClick={async () => {
-                setBatchScoring(true);
-                try {
-                  await api.post("/api/projets/batch-score", {
-                    projet_ids: Array.from(selectedIds),
-                  });
-                  queryClient.invalidateQueries({ queryKey: ["projets"] });
-                  queryClient.invalidateQueries({ queryKey: ["projets-stats"] });
-                  setSelectedIds(new Set());
-                } finally {
-                  setBatchScoring(false);
-                }
-              }}
-              className="flex items-center gap-2 rounded-lg bg-emerald-500 px-3 py-2 text-sm font-medium text-white hover:bg-emerald-600 disabled:opacity-50"
-            >
-              {batchScoring ? <Loader2 className="h-4 w-4 animate-spin" /> : <Target className="h-4 w-4" />}
-              <span className="hidden sm:inline">
-                Score ({selectedIds.size})
-              </span>
-            </button>
+            <>
+              <button
+                disabled={batchEnriching}
+                onClick={async () => {
+                  setBatchEnriching(true);
+                  try {
+                    await api.post("/api/projets/batch-enrich", {
+                      projet_ids: Array.from(selectedIds),
+                    });
+                    queryClient.invalidateQueries({ queryKey: ["projets"] });
+                    queryClient.invalidateQueries({ queryKey: ["projets-stats"] });
+                    setSelectedIds(new Set());
+                  } finally {
+                    setBatchEnriching(false);
+                  }
+                }}
+                className="flex items-center gap-2 rounded-lg bg-teal-500 px-3 py-2 text-sm font-medium text-white hover:bg-teal-600 disabled:opacity-50"
+              >
+                {batchEnriching ? <Loader2 className="h-4 w-4 animate-spin" /> : <Leaf className="h-4 w-4" />}
+                <span className="hidden sm:inline">
+                  {t("enrichment.enrichBatch")} ({selectedIds.size})
+                </span>
+              </button>
+              <button
+                disabled={batchScoring}
+                onClick={async () => {
+                  setBatchScoring(true);
+                  try {
+                    await api.post("/api/projets/batch-score", {
+                      projet_ids: Array.from(selectedIds),
+                    });
+                    queryClient.invalidateQueries({ queryKey: ["projets"] });
+                    queryClient.invalidateQueries({ queryKey: ["projets-stats"] });
+                    setSelectedIds(new Set());
+                  } finally {
+                    setBatchScoring(false);
+                  }
+                }}
+                className="flex items-center gap-2 rounded-lg bg-emerald-500 px-3 py-2 text-sm font-medium text-white hover:bg-emerald-600 disabled:opacity-50"
+              >
+                {batchScoring ? <Loader2 className="h-4 w-4 animate-spin" /> : <Target className="h-4 w-4" />}
+                <span className="hidden sm:inline">
+                  Score ({selectedIds.size})
+                </span>
+              </button>
+            </>
           )}
           <button
             onClick={() => {

@@ -36,6 +36,9 @@ import {
   File,
   Image,
   FileSpreadsheet,
+  Leaf,
+  Thermometer,
+  Loader2,
 } from "lucide-react";
 import api from "../lib/api";
 import ProjectForm from "../components/ProjectForm";
@@ -109,6 +112,27 @@ interface AIAnalysisResponse {
   projet_id: string;
   projet_nom: string;
   analysis: AIAnalysis;
+}
+
+interface EnrichmentData {
+  projet_id: string;
+  enriched: boolean;
+  pvgis?: {
+    ghi_kwh_m2_an: number | null;
+    productible_kwh_kwc_an: number | null;
+    temperature_moyenne: number | null;
+    source: string;
+  };
+  constraints?: {
+    natura2000: { code: string; nom: string; type_zone: string; intersects: boolean; distance_m: number }[];
+    znieff: { code: string; nom: string; type_zone: string; intersects: boolean; distance_m: number }[];
+    summary: { total_constraints: number; in_zone: number; nearby: number };
+  };
+  nearest_postes?: {
+    nom: string; gestionnaire: string; distance_km: number;
+    capacite_disponible_mw: number | null; tension_kv: number | null;
+  }[];
+  enriched_at?: string;
 }
 
 const CRITERIA_KEYS = [
@@ -295,6 +319,20 @@ interface DocumentItem {
   uploaded_at: string | null;
 }
 
+function ghiColor(ghi: number | null): string {
+  if (ghi === null) return "text-slate-400";
+  if (ghi >= 1400) return "text-emerald-600";
+  if (ghi >= 1200) return "text-amber-600";
+  return "text-red-500";
+}
+
+function ghiBg(ghi: number | null): string {
+  if (ghi === null) return "bg-slate-50";
+  if (ghi >= 1400) return "bg-emerald-50";
+  if (ghi >= 1200) return "bg-amber-50";
+  return "bg-red-50";
+}
+
 type TabKey = "overview" | "phases" | "score" | "ai" | "documents";
 
 export default function ProjectDetail() {
@@ -339,6 +377,26 @@ export default function ProjectDetail() {
     mutationFn: async (projetId: string) => {
       const res = await api.post(`/api/projets/${projetId}/analyze`);
       return res.data;
+    },
+  });
+
+  const { data: enrichment, refetch: refetchEnrichment } = useQuery<EnrichmentData>({
+    queryKey: ["projet-enrichment", id],
+    queryFn: async () => {
+      const res = await api.get(`/api/projets/${id}/enrichment`);
+      return res.data;
+    },
+    enabled: !!id,
+  });
+
+  const enrichMutation = useMutation<EnrichmentData, Error, string>({
+    mutationFn: async (projetId: string) => {
+      const res = await api.post(`/api/projets/${projetId}/enrich`);
+      return res.data;
+    },
+    onSuccess: () => {
+      refetchEnrichment();
+      queryClient.invalidateQueries({ queryKey: ["projet", id] });
     },
   });
 
@@ -493,80 +551,282 @@ export default function ProjectDetail() {
 
       {/* Tab: Overview */}
       {activeTab === "overview" && (
-        <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
-          {/* Progression summary */}
-          <div className="card">
-            <h3 className="mb-4 text-sm font-medium text-slate-500">
-              {t("projects.progression")}
-            </h3>
-            <div className="flex items-center gap-4">
-              <div className="text-center">
-                <p className="text-3xl font-bold text-slate-900">{overallPct}%</p>
-                <p className="text-xs text-slate-400">{t("projects.overall")}</p>
-              </div>
-              <div className="flex-1">
-                <div className="h-3 rounded-full bg-slate-100">
-                  <div
-                    className="h-3 rounded-full bg-primary-500 transition-all duration-500"
-                    style={{ width: `${overallPct}%` }}
-                  />
+        <div className="space-y-6">
+          <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
+            {/* Progression summary */}
+            <div className="card">
+              <h3 className="mb-4 text-sm font-medium text-slate-500">
+                {t("projects.progression")}
+              </h3>
+              <div className="flex items-center gap-4">
+                <div className="text-center">
+                  <p className="text-3xl font-bold text-slate-900">{overallPct}%</p>
+                  <p className="text-xs text-slate-400">{t("projects.overall")}</p>
                 </div>
-                <p className="mt-1 text-xs text-slate-400">
-                  {completedBlocs}/{totalBlocs} {t("projects.blocsCompleted")}
+                <div className="flex-1">
+                  <div className="h-3 rounded-full bg-slate-100">
+                    <div
+                      className="h-3 rounded-full bg-primary-500 transition-all duration-500"
+                      style={{ width: `${overallPct}%` }}
+                    />
+                  </div>
+                  <p className="mt-1 text-xs text-slate-400">
+                    {completedBlocs}/{totalBlocs} {t("projects.blocsCompleted")}
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            {/* Score card */}
+            <div className="card flex flex-col items-center">
+              <h3 className="mb-3 text-sm font-medium text-slate-500">
+                {t("scoring.globalScore")}
+              </h3>
+              {projet.score_global !== null ? (
+                <ScoreGauge score={projet.score_global} />
+              ) : (
+                <div className="flex flex-col items-center gap-2 py-4">
+                  <Target className="h-8 w-8 text-slate-300" />
+                  <button
+                    onClick={() => id && scoreMutation.mutate(id)}
+                    className="flex items-center gap-2 rounded-lg bg-primary-500 px-3 py-1.5 text-xs font-medium text-white hover:bg-primary-600"
+                  >
+                    {t("scoring.calculate")}
+                  </button>
+                </div>
+              )}
+            </div>
+
+            {/* Project info */}
+            <div className="card space-y-3">
+              <h3 className="text-sm font-medium text-slate-500">
+                {t("scoring.projectInfo")}
+              </h3>
+              <div className="space-y-2 text-sm">
+                {projet.region && (
+                  <div className="flex justify-between">
+                    <span className="text-slate-400">{t("scoring.region")}</span>
+                    <span className="text-slate-700">{projet.region}</span>
+                  </div>
+                )}
+                {projet.surface_ha && (
+                  <div className="flex justify-between">
+                    <span className="text-slate-400">{t("scoring.surface")}</span>
+                    <span className="font-mono text-slate-700">
+                      {projet.surface_ha} ha
+                    </span>
+                  </div>
+                )}
+                {projet.lon && projet.lat && (
+                  <div className="flex justify-between">
+                    <span className="text-slate-400">Coordonnees</span>
+                    <span className="font-mono text-xs text-slate-700">
+                      {projet.lat.toFixed(4)}, {projet.lon.toFixed(4)}
+                    </span>
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+
+          {/* Enrichment: Site Data widget */}
+          <div className="card">
+            <div className="mb-4 flex items-center justify-between">
+              <h3 className="flex items-center gap-2 text-sm font-medium text-slate-500">
+                <Leaf className="h-4 w-4 text-emerald-500" />
+                {t("enrichment.title")}
+              </h3>
+              <button
+                onClick={() => id && enrichMutation.mutate(id)}
+                disabled={enrichMutation.isPending}
+                className="flex items-center gap-1.5 rounded-lg bg-emerald-500 px-3 py-1.5 text-xs font-medium text-white hover:bg-emerald-600 disabled:opacity-50"
+              >
+                {enrichMutation.isPending ? (
+                  <Loader2 className="h-3 w-3 animate-spin" />
+                ) : (
+                  <RefreshCw className="h-3 w-3" />
+                )}
+                {enrichMutation.isPending
+                  ? t("enrichment.enriching")
+                  : enrichment?.enriched
+                    ? t("scoring.recalculate")
+                    : t("enrichment.enrich")}
+              </button>
+            </div>
+
+            {enrichment?.enriched ? (
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+                {/* Irradiation GHI */}
+                <div className={`rounded-lg p-3 ${ghiBg(enrichment.pvgis?.ghi_kwh_m2_an ?? null)}`}>
+                  <div className="flex items-center gap-2">
+                    <Sun className="h-4 w-4 text-amber-500" />
+                    <span className="text-xs text-slate-500">
+                      {t("enrichment.irradiation")}
+                    </span>
+                  </div>
+                  <p className={`mt-1 text-xl font-bold font-mono ${ghiColor(enrichment.pvgis?.ghi_kwh_m2_an ?? null)}`}>
+                    {enrichment.pvgis?.ghi_kwh_m2_an ?? "—"}
+                    <span className="ml-1 text-xs font-normal text-slate-400">kWh/m2/an</span>
+                  </p>
+                </div>
+
+                {/* Productible */}
+                <div className="rounded-lg bg-blue-50 p-3">
+                  <div className="flex items-center gap-2">
+                    <Zap className="h-4 w-4 text-blue-500" />
+                    <span className="text-xs text-slate-500">
+                      {t("enrichment.productible")}
+                    </span>
+                  </div>
+                  <p className="mt-1 text-xl font-bold font-mono text-blue-600">
+                    {enrichment.pvgis?.productible_kwh_kwc_an ?? "—"}
+                    <span className="ml-1 text-xs font-normal text-slate-400">kWh/kWc/an</span>
+                  </p>
+                </div>
+
+                {/* Temperature */}
+                <div className="rounded-lg bg-orange-50 p-3">
+                  <div className="flex items-center gap-2">
+                    <Thermometer className="h-4 w-4 text-orange-500" />
+                    <span className="text-xs text-slate-500">
+                      {t("enrichment.temperature")}
+                    </span>
+                  </div>
+                  <p className="mt-1 text-xl font-bold font-mono text-orange-600">
+                    {enrichment.pvgis?.temperature_moyenne != null
+                      ? `${enrichment.pvgis.temperature_moyenne}°C`
+                      : "—"}
+                  </p>
+                </div>
+
+                {/* Constraints summary */}
+                <div className={`rounded-lg p-3 ${
+                  (enrichment.constraints?.summary.in_zone ?? 0) > 0
+                    ? "bg-red-50"
+                    : (enrichment.constraints?.summary.nearby ?? 0) > 0
+                      ? "bg-amber-50"
+                      : "bg-emerald-50"
+                }`}>
+                  <div className="flex items-center gap-2">
+                    <ShieldCheck className={`h-4 w-4 ${
+                      (enrichment.constraints?.summary.in_zone ?? 0) > 0
+                        ? "text-red-500"
+                        : (enrichment.constraints?.summary.nearby ?? 0) > 0
+                          ? "text-amber-500"
+                          : "text-emerald-500"
+                    }`} />
+                    <span className="text-xs text-slate-500">
+                      {t("enrichment.constraints")}
+                    </span>
+                  </div>
+                  {(enrichment.constraints?.summary.total_constraints ?? 0) === 0 ? (
+                    <p className="mt-1 text-sm font-medium text-emerald-600">
+                      {t("enrichment.noConstraints")}
+                    </p>
+                  ) : (
+                    <div className="mt-1 space-y-0.5">
+                      {(enrichment.constraints?.summary.in_zone ?? 0) > 0 && (
+                        <p className="text-sm font-medium text-red-600">
+                          {enrichment.constraints!.summary.in_zone} {t("enrichment.inZone")}
+                        </p>
+                      )}
+                      {(enrichment.constraints?.summary.nearby ?? 0) > 0 && (
+                        <p className="text-sm font-medium text-amber-600">
+                          {enrichment.constraints!.summary.nearby} {t("enrichment.nearby")}
+                        </p>
+                      )}
+                    </div>
+                  )}
+                </div>
+              </div>
+            ) : (
+              <div className="flex flex-col items-center rounded-lg border-2 border-dashed border-slate-200 py-6 text-slate-400">
+                <Leaf className="h-8 w-8" />
+                <p className="mt-2 text-sm">{t("enrichment.notEnriched")}</p>
+                <p className="mt-1 text-xs text-slate-300">
+                  PVGIS + Natura 2000 + ZNIEFF + Postes sources
                 </p>
               </div>
-            </div>
-          </div>
+            )}
 
-          {/* Score card */}
-          <div className="card flex flex-col items-center">
-            <h3 className="mb-3 text-sm font-medium text-slate-500">
-              {t("scoring.globalScore")}
-            </h3>
-            {projet.score_global !== null ? (
-              <ScoreGauge score={projet.score_global} />
-            ) : (
-              <div className="flex flex-col items-center gap-2 py-4">
-                <Target className="h-8 w-8 text-slate-300" />
-                <button
-                  onClick={() => id && scoreMutation.mutate(id)}
-                  className="flex items-center gap-2 rounded-lg bg-primary-500 px-3 py-1.5 text-xs font-medium text-white hover:bg-primary-600"
-                >
-                  {t("scoring.calculate")}
-                </button>
+            {/* Constraint details + Nearest postes */}
+            {enrichment?.enriched && (
+              <div className="mt-4 grid grid-cols-1 gap-4 lg:grid-cols-2">
+                {/* Constraint zones list */}
+                {(enrichment.constraints?.natura2000?.length ?? 0) + (enrichment.constraints?.znieff?.length ?? 0) > 0 && (
+                  <div>
+                    <h4 className="mb-2 text-xs font-medium text-slate-400 uppercase">
+                      {t("enrichment.constraints")}
+                    </h4>
+                    <div className="space-y-1.5">
+                      {enrichment.constraints?.natura2000?.map((z) => (
+                        <div key={z.code} className="flex items-center gap-2 text-xs">
+                          <span className={`inline-block h-2 w-2 rounded-full ${z.intersects ? "bg-red-500" : "bg-amber-400"}`} />
+                          <span className="font-medium text-slate-600">{t("enrichment.natura2000")}</span>
+                          <span className="truncate text-slate-500">{z.nom}</span>
+                          <span className="ml-auto font-mono text-slate-400">
+                            {z.distance_m < 1000 ? `${z.distance_m} m` : `${(z.distance_m / 1000).toFixed(1)} km`}
+                          </span>
+                        </div>
+                      ))}
+                      {enrichment.constraints?.znieff?.map((z) => (
+                        <div key={z.code} className="flex items-center gap-2 text-xs">
+                          <span className={`inline-block h-2 w-2 rounded-full ${z.intersects ? "bg-red-500" : "bg-amber-400"}`} />
+                          <span className="font-medium text-slate-600">{t("enrichment.znieff")} {z.type_zone}</span>
+                          <span className="truncate text-slate-500">{z.nom}</span>
+                          <span className="ml-auto font-mono text-slate-400">
+                            {z.distance_m < 1000 ? `${z.distance_m} m` : `${(z.distance_m / 1000).toFixed(1)} km`}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Nearest postes */}
+                {enrichment.nearest_postes && enrichment.nearest_postes.length > 0 && (
+                  <div>
+                    <h4 className="mb-2 text-xs font-medium text-slate-400 uppercase">
+                      {t("enrichment.nearestPostes")}
+                    </h4>
+                    <div className="space-y-2">
+                      {enrichment.nearest_postes.map((p, i) => (
+                        <div key={i} className="flex items-center gap-3 rounded-lg bg-slate-50 p-2.5">
+                          <div className="flex h-6 w-6 items-center justify-center rounded-full bg-primary-100 text-xs font-bold text-primary-600">
+                            {i + 1}
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <p className="truncate text-sm font-medium text-slate-700">{p.nom}</p>
+                            <p className="text-xs text-slate-400">
+                              {p.gestionnaire}
+                              {p.tension_kv && ` · ${p.tension_kv} kV`}
+                              {p.capacite_disponible_mw != null && ` · ${p.capacite_disponible_mw} MW dispo`}
+                            </p>
+                          </div>
+                          <span className="font-mono text-sm font-medium text-primary-600">
+                            {p.distance_km} km
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
               </div>
             )}
-          </div>
 
-          {/* Project info */}
-          <div className="card space-y-3">
-            <h3 className="text-sm font-medium text-slate-500">
-              {t("scoring.projectInfo")}
-            </h3>
-            <div className="space-y-2 text-sm">
-              {projet.region && (
-                <div className="flex justify-between">
-                  <span className="text-slate-400">{t("scoring.region")}</span>
-                  <span className="text-slate-700">{projet.region}</span>
-                </div>
-              )}
-              {projet.surface_ha && (
-                <div className="flex justify-between">
-                  <span className="text-slate-400">{t("scoring.surface")}</span>
-                  <span className="font-mono text-slate-700">
-                    {projet.surface_ha} ha
+            {/* Source + date */}
+            {enrichment?.enriched && enrichment.pvgis?.source && (
+              <div className="mt-3 flex items-center gap-3 text-xs text-slate-400">
+                <span>
+                  {t("enrichment.source")}: {enrichment.pvgis.source === "pvgis_api" ? t("enrichment.pvgisApi") : t("enrichment.fallback")}
+                </span>
+                {enrichment.enriched_at && (
+                  <span>
+                    · {t("enrichment.enrichedAt")} {new Date(enrichment.enriched_at).toLocaleDateString("fr-FR")}
                   </span>
-                </div>
-              )}
-              {projet.lon && projet.lat && (
-                <div className="flex justify-between">
-                  <span className="text-slate-400">Coordonnees</span>
-                  <span className="font-mono text-xs text-slate-700">
-                    {projet.lat.toFixed(4)}, {projet.lon.toFixed(4)}
-                  </span>
-                </div>
-              )}
-            </div>
+                )}
+              </div>
+            )}
           </div>
         </div>
       )}

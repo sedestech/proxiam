@@ -18,12 +18,15 @@ from pydantic import BaseModel, Field, field_validator
 from sqlalchemy import select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.auth import require_user
 from app.database import get_db
 from app.models import Projet
+from app.models.user import User
 from app.services.pvgis import get_pvgis_data
 from app.services.constraints import get_constraints, get_nearest_postes
 from app.services.regulatory import analyze_regulatory
 from app.services.financial import estimate_financial
+from app.services.tier_limits import check_feature_access, check_quota_or_raise, log_usage
 from app.routes.notifications import create_notification
 
 logger = logging.getLogger(__name__)
@@ -85,21 +88,37 @@ async def _enrich_project(db: AsyncSession, projet) -> dict:
 # ─── Single enrich ───
 
 
+async def _check_project_ownership(db: AsyncSession, projet, user: User):
+    """Verify the authenticated user owns the project (or is admin)."""
+    if projet.user_id and str(projet.user_id) != str(user.id) and user.tier != "admin":
+        raise HTTPException(status_code=403, detail="Access denied")
+
+
 @router.post("/projets/{projet_id}/enrich")
-async def enrich_project(projet_id: str, db: AsyncSession = Depends(get_db)):
+async def enrich_project(
+    projet_id: str,
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(require_user),
+):
     """Enrich a project with PVGIS solar data, environmental constraints,
     and nearest electrical substations.
 
     Requires the project to have coordinates (geom).
     Data is stored in the project's metadata JSONB field.
     """
+    await check_quota_or_raise(db, user, "enrich")
+
     result = await db.execute(select(Projet).where(Projet.id == projet_id))
     projet = result.scalar_one_or_none()
     if not projet:
         raise HTTPException(status_code=404, detail="Projet non trouve")
 
+    await _check_project_ownership(db, projet, user)
+
     enrichment = await _enrich_project(db, projet)
     await db.commit()
+
+    await log_usage(db, user, "enrich")
 
     await create_notification(
         db, type="project_enriched",
@@ -127,11 +146,18 @@ class BatchEnrichRequest(BaseModel):
 
 
 @router.post("/projets/batch-enrich")
-async def batch_enrich(body: BatchEnrichRequest, db: AsyncSession = Depends(get_db)):
+async def batch_enrich(
+    body: BatchEnrichRequest,
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(require_user),
+):
     """Enrich multiple projects in one call (max 20).
 
     Each project is enriched independently — one failure doesn't block others.
+    Requires Pro tier or above.
     """
+    await check_feature_access(user, "batch")
+
     results = []
     for pid in body.projet_ids:
         try:
@@ -176,12 +202,18 @@ async def batch_enrich(body: BatchEnrichRequest, db: AsyncSession = Depends(get_
 
 
 @router.get("/projets/{projet_id}/enrichment")
-async def get_enrichment(projet_id: str, db: AsyncSession = Depends(get_db)):
+async def get_enrichment(
+    projet_id: str,
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(require_user),
+):
     """Retrieve stored enrichment data for a project."""
     result = await db.execute(select(Projet).where(Projet.id == projet_id))
     projet = result.scalar_one_or_none()
     if not projet:
         raise HTTPException(status_code=404, detail="Projet non trouve")
+
+    await _check_project_ownership(db, projet, user)
 
     metadata = projet.metadata_ or {}
     enrichment = metadata.get("enrichment")
@@ -204,7 +236,11 @@ async def get_enrichment(projet_id: str, db: AsyncSession = Depends(get_db)):
 
 
 @router.get("/projets/{projet_id}/regulatory")
-async def get_regulatory(projet_id: str, db: AsyncSession = Depends(get_db)):
+async def get_regulatory(
+    projet_id: str,
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(require_user),
+):
     """Analyse réglementaire complète d'un projet.
 
     Retourne les obligations applicables (ICPE, EIE, PC, AE, raccordement),
@@ -215,6 +251,8 @@ async def get_regulatory(projet_id: str, db: AsyncSession = Depends(get_db)):
     projet = result.scalar_one_or_none()
     if not projet:
         raise HTTPException(status_code=404, detail="Projet non trouve")
+
+    await _check_project_ownership(db, projet, user)
 
     # Load enrichment data if available
     metadata = projet.metadata_ or {}
@@ -246,7 +284,11 @@ async def get_regulatory(projet_id: str, db: AsyncSession = Depends(get_db)):
 
 
 @router.get("/projets/{projet_id}/financial")
-async def get_financial(projet_id: str, db: AsyncSession = Depends(get_db)):
+async def get_financial(
+    projet_id: str,
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(require_user),
+):
     """Estimation financiere rapide d'un projet ENR.
 
     Retourne CAPEX, OPEX, revenus, LCOE (EUR/MWh), TRI (%), payback period.
@@ -257,6 +299,8 @@ async def get_financial(projet_id: str, db: AsyncSession = Depends(get_db)):
     projet = result.scalar_one_or_none()
     if not projet:
         raise HTTPException(status_code=404, detail="Projet non trouve")
+
+    await _check_project_ownership(db, projet, user)
 
     metadata = projet.metadata_ or {}
     enrichment_data = metadata.get("enrichment")
@@ -287,16 +331,25 @@ async def get_financial(projet_id: str, db: AsyncSession = Depends(get_db)):
 
 
 @router.post("/projets/{projet_id}/report")
-async def generate_report(projet_id: str, db: AsyncSession = Depends(get_db)):
+async def generate_report(
+    projet_id: str,
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(require_user),
+):
     """Generate a PDF feasibility report for a project.
 
     Combines enrichment + regulatory + financial data into a single
     exportable PDF report. Returns the PDF as binary response.
+    Requires Pro tier or above.
     """
+    await check_feature_access(user, "pdf_export")
+
     result = await db.execute(select(Projet).where(Projet.id == projet_id))
     projet = result.scalar_one_or_none()
     if not projet:
         raise HTTPException(status_code=404, detail="Projet non trouve")
+
+    await _check_project_ownership(db, projet, user)
 
     metadata = projet.metadata_ or {}
     enrichment_data = metadata.get("enrichment")

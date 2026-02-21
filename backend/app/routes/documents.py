@@ -10,7 +10,9 @@ from fastapi.responses import Response
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.auth import require_user
 from app.database import get_db
+from app.models.user import User
 from app.services.storage import delete_file, download_file, upload_file
 
 router = APIRouter()
@@ -25,6 +27,7 @@ async def upload_document(
     category: str = Form("general"),
     description: Optional[str] = Form(None),
     db: AsyncSession = Depends(get_db),
+    user: User = Depends(require_user),
 ):
     """Upload a document to MinIO and store metadata in PostgreSQL."""
     data = await file.read()
@@ -90,6 +93,7 @@ async def list_documents(
     category: Optional[str] = Query(None),
     limit: int = Query(50, le=200),
     db: AsyncSession = Depends(get_db),
+    user: User = Depends(require_user),
 ):
     """List documents, optionally filtered by project or category."""
     conditions = []
@@ -138,7 +142,11 @@ async def list_documents(
 
 
 @router.get("/documents/{doc_id}/download")
-async def download_document(doc_id: str, db: AsyncSession = Depends(get_db)):
+async def download_document(
+    doc_id: str,
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(require_user),
+):
     """Download a document by ID."""
     result = await db.execute(
         text("SELECT storage_key, original_name, mimetype FROM documents WHERE id = :id"),
@@ -158,7 +166,11 @@ async def download_document(doc_id: str, db: AsyncSession = Depends(get_db)):
 
 
 @router.delete("/documents/{doc_id}")
-async def delete_document(doc_id: str, db: AsyncSession = Depends(get_db)):
+async def delete_document(
+    doc_id: str,
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(require_user),
+):
     """Delete a document (MinIO + PostgreSQL)."""
     result = await db.execute(
         text("SELECT storage_key FROM documents WHERE id = :id"),

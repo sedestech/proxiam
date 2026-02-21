@@ -10,7 +10,9 @@ from fastapi import APIRouter, Depends, Query
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.auth import require_user
 from app.database import get_db
+from app.models.user import User
 
 router = APIRouter()
 
@@ -46,6 +48,7 @@ async def get_notifications(
     limit: int = Query(20, le=100),
     unread_only: bool = Query(False),
     db: AsyncSession = Depends(get_db),
+    user: User = Depends(require_user),
 ):
     """Return notifications from the database."""
     where = "WHERE read = false" if unread_only else ""
@@ -90,7 +93,11 @@ async def get_notifications(
 
 
 @router.put("/notifications/{notif_id}/read")
-async def mark_as_read(notif_id: int, db: AsyncSession = Depends(get_db)):
+async def mark_as_read(
+    notif_id: int,
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(require_user),
+):
     """Mark a single notification as read."""
     await db.execute(
         text("UPDATE notifications SET read = true WHERE id = :id"),
@@ -101,7 +108,10 @@ async def mark_as_read(notif_id: int, db: AsyncSession = Depends(get_db)):
 
 
 @router.put("/notifications/read-all")
-async def mark_all_read(db: AsyncSession = Depends(get_db)):
+async def mark_all_read(
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(require_user),
+):
     """Mark all notifications as read."""
     result = await db.execute(
         text("UPDATE notifications SET read = true WHERE read = false")

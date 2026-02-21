@@ -4,7 +4,9 @@ import logging
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.auth import require_admin
 from app.database import get_db
+from app.models.user import User
 from app.services.search import search as meili_search
 
 logger = logging.getLogger(__name__)
@@ -47,7 +49,10 @@ async def search_global(
 
 
 @router.post("/search/reindex")
-async def reindex_search(db: AsyncSession = Depends(get_db)):
+async def reindex_search(
+    db: AsyncSession = Depends(get_db),
+    admin: User = Depends(require_admin),
+):
     """Trigger a full reindex of Meilisearch from PostgreSQL data."""
     try:
         from app.services.search import index_all_entities

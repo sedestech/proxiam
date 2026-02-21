@@ -1,6 +1,7 @@
 import { lazy, Suspense } from "react";
 import { Routes, Route } from "react-router-dom";
 import Layout from "./components/layout/Layout";
+import ProtectedRoute from "./components/ProtectedRoute";
 import LoadingFallback from "./components/LoadingFallback";
 import PageErrorBoundary from "./components/PageErrorBoundary";
 
@@ -36,8 +37,8 @@ export default function App() {
       {/* Auth pages (no layout) */}
       <Route path="sign-in/*" element={<PageWrapper><SignIn /></PageWrapper>} />
 
-      {/* Main app */}
-      <Route element={<Layout />}>
+      {/* Main app — requires authentication */}
+      <Route element={<ProtectedRoute><Layout /></ProtectedRoute>}>
         <Route index element={<Dashboard />} />
         <Route path="map" element={<PageWrapper><Map /></PageWrapper>} />
         <Route path="knowledge" element={<PageWrapper><Knowledge /></PageWrapper>} />

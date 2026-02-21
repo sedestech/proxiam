@@ -22,6 +22,7 @@ from app.models.user import User
 from app.routes.notifications import create_notification
 from app.services.financial import estimate_financial
 from app.services.regulatory import analyze_regulatory
+from app.services.tier_limits import check_project_limit
 
 router = APIRouter()
 
@@ -273,16 +274,17 @@ async def export_projets_csv(
     db: AsyncSession = Depends(get_db),
     user: User = Depends(require_user),
 ):
-    """Export all projects as CSV file."""
+    """Export user's projects as CSV file."""
     query = text("""
         SELECT id, nom, filiere, puissance_mwc, surface_ha,
                commune, departement, region, statut, score_global,
                ST_X(geom) as lon, ST_Y(geom) as lat,
                date_creation
         FROM projets
+        WHERE (user_id = :user_id OR user_id IS NULL)
         ORDER BY nom
     """)
-    result = await db.execute(query)
+    result = await db.execute(query, {"user_id": str(user.id)})
     rows = result.mappings().all()
 
     output = io.StringIO()
@@ -485,9 +487,11 @@ async def get_projet(
 async def create_projet(
     body: ProjetCreate,
     db: AsyncSession = Depends(get_db),
-    user: Optional[User] = Depends(get_current_user),
+    user: User = Depends(require_user),
 ):
     """Create a new project."""
+    await check_project_limit(db, user)
+
     projet_id = str(uuid.uuid4())
     geom_sql = "ST_SetSRID(ST_MakePoint(:lon, :lat), 4326)" if body.lon and body.lat else "NULL"
 
@@ -765,8 +769,8 @@ async def import_projets(
 
         await db.execute(
             text(f"""
-                INSERT INTO projets (id, nom, filiere, puissance_mwc, surface_ha, commune, departement, region, statut, geom)
-                VALUES (:id, :nom, :filiere, :puissance, :surface, :commune, :departement, :region, :statut, {geom_sql})
+                INSERT INTO projets (id, nom, filiere, puissance_mwc, surface_ha, commune, departement, region, statut, geom, user_id)
+                VALUES (:id, :nom, :filiere, :puissance, :surface, :commune, :departement, :region, :statut, {geom_sql}, :user_id)
             """),
             {
                 "id": new_id, "nom": nom, "filiere": filiere,
@@ -774,6 +778,7 @@ async def import_projets(
                 "commune": commune, "departement": departement,
                 "region": region, "statut": statut,
                 "lon": lon, "lat": lat,
+                "user_id": str(user.id),
             },
         )
         created.append({"id": new_id, "nom": nom})

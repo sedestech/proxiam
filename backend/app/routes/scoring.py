@@ -14,9 +14,12 @@ from pydantic import BaseModel, Field, field_validator
 from sqlalchemy import select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.auth import require_user
 from app.database import get_db
 from app.models import Projet
+from app.models.user import User
 from app.services.scoring import calculate_score as compute_score, WEIGHTS, DEFAULT_WEIGHTS
+from app.services.tier_limits import check_feature_access, check_quota_or_raise, log_usage
 from app.routes.notifications import create_notification
 
 logger = logging.getLogger(__name__)
@@ -65,13 +68,19 @@ async def _score_and_persist(db: AsyncSession, projet, lon, lat) -> dict:
 
 
 @router.post("/projets/{projet_id}/score")
-async def calculate_score(projet_id: str, db: AsyncSession = Depends(get_db)):
+async def calculate_score(
+    projet_id: str,
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(require_user),
+):
     """Calculate project score (0-100) based on 6 criteria.
 
     Reads the project from DB, extracts coordinates (geom), filiere,
     departement, surface_ha, puissance_mwc, then runs the scoring engine.
     Persists the global score on the project row.
     """
+    await check_quota_or_raise(db, user, "score")
+
     result = await db.execute(
         select(Projet).where(Projet.id == projet_id)
     )
@@ -82,6 +91,8 @@ async def calculate_score(projet_id: str, db: AsyncSession = Depends(get_db)):
     lon, lat = await _extract_coords(db, projet)
     score_result = await _score_and_persist(db, projet, lon, lat)
     await db.commit()
+
+    await log_usage(db, user, "score")
 
     await create_notification(
         db, type="score_calculated",
@@ -94,7 +105,11 @@ async def calculate_score(projet_id: str, db: AsyncSession = Depends(get_db)):
 
 
 @router.get("/projets/{projet_id}/score")
-async def get_score(projet_id: str, db: AsyncSession = Depends(get_db)):
+async def get_score(
+    projet_id: str,
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(require_user),
+):
     """Retrieve the last calculated score for a project.
 
     If no score has been calculated yet, returns score: null with a hint.
@@ -135,12 +150,19 @@ class BatchScoreRequest(BaseModel):
 
 
 @router.post("/projets/batch-score")
-async def batch_score(body: BatchScoreRequest, db: AsyncSession = Depends(get_db)):
+async def batch_score(
+    body: BatchScoreRequest,
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(require_user),
+):
     """Score multiple projects in one call (max 20). Returns per-project results.
 
     Security: Input validated via Pydantic (max 20 items, no duplicates).
     Each project is scored independently — one failure doesn't block others.
+    Requires Pro tier or above.
     """
+    await check_feature_access(user, "batch")
+
     results = []
     for pid in body.projet_ids:
         try:

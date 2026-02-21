@@ -2,8 +2,12 @@ import { Outlet } from "react-router-dom";
 import Sidebar from "./Sidebar";
 import Header from "./Header";
 import MobileNav from "./MobileNav";
+import { useClerkToken } from "../../hooks/useClerkToken";
 
 export default function Layout() {
+  // Wire Clerk JWT token into the API client interceptor
+  useClerkToken();
+
   return (
     <div className="flex h-screen overflow-hidden bg-slate-50 dark:bg-slate-900">
       {/* Desktop sidebar */}

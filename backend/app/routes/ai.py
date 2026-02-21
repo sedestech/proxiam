@@ -8,12 +8,15 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy import select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.auth import require_user
 from app.database import get_db
 from app.config import settings
 from app.models import Projet
+from app.models.user import User
 from app.services.ai import analyze_project
 from app.services.scoring import calculate_score as compute_score
 from app.services.regulatory import analyze_regulatory
+from app.services.tier_limits import check_quota_or_raise, log_usage
 
 router = APIRouter()
 
@@ -34,12 +37,18 @@ async def ai_status():
 
 
 @router.post("/projets/{projet_id}/analyze")
-async def analyze_projet(projet_id: str, db: AsyncSession = Depends(get_db)):
+async def analyze_projet(
+    projet_id: str,
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(require_user),
+):
     """Run AI analysis on a project.
 
     Fetches project data, computes score if needed, gets phase progression,
     then calls the AI service for analysis and recommendations.
     """
+    await check_quota_or_raise(db, user, "ai_chat")
+
     # Fetch project
     query = text("""
         SELECT id, nom, filiere, puissance_mwc, surface_ha,
@@ -123,6 +132,8 @@ async def analyze_projet(projet_id: str, db: AsyncSession = Depends(get_db)):
         project_data, score_data, phases_data,
         enrichment_data, regulatory_data,
     )
+
+    await log_usage(db, user, "ai_chat")
 
     return {
         "projet_id": projet_id,

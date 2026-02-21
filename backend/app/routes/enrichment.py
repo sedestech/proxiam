@@ -1,16 +1,19 @@
-"""Enrichment & Regulatory API routes — Sprint 13-14.
+"""Enrichment, Regulatory & Financial API routes — Sprint 13-15.
 
 Endpoints:
   POST /api/projets/{id}/enrich       — enrich a single project
   POST /api/projets/batch-enrich      — enrich multiple projects (max 20)
   GET  /api/projets/{id}/enrichment   — retrieve enrichment data
   GET  /api/projets/{id}/regulatory   — regulatory analysis with expert tips
+  GET  /api/projets/{id}/financial    — financial estimation (CAPEX/OPEX/LCOE/TRI)
+  POST /api/projets/{id}/report       — generate PDF feasibility report
 """
 import logging
 from datetime import datetime, timezone
 from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException
+from fastapi.responses import Response
 from pydantic import BaseModel, Field, field_validator
 from sqlalchemy import select, text
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -20,6 +23,7 @@ from app.models import Projet
 from app.services.pvgis import get_pvgis_data
 from app.services.constraints import get_constraints, get_nearest_postes
 from app.services.regulatory import analyze_regulatory
+from app.services.financial import estimate_financial
 from app.routes.notifications import create_notification
 
 logger = logging.getLogger(__name__)
@@ -217,8 +221,8 @@ async def get_regulatory(projet_id: str, db: AsyncSession = Depends(get_db)):
     enrichment_data = metadata.get("enrichment")
 
     filiere = projet.filiere or "solaire_sol"
-    puissance = projet.puissance_mwc or 1.0
-    surface = projet.surface_ha
+    puissance = float(projet.puissance_mwc) if projet.puissance_mwc else 1.0
+    surface = float(projet.surface_ha) if projet.surface_ha else None
 
     analysis = analyze_regulatory(
         filiere=filiere,
@@ -236,3 +240,120 @@ async def get_regulatory(projet_id: str, db: AsyncSession = Depends(get_db)):
         "enriched": enrichment_data is not None,
         **analysis,
     }
+
+
+# ─── Financial estimation ───
+
+
+@router.get("/projets/{projet_id}/financial")
+async def get_financial(projet_id: str, db: AsyncSession = Depends(get_db)):
+    """Estimation financiere rapide d'un projet ENR.
+
+    Retourne CAPEX, OPEX, revenus, LCOE (EUR/MWh), TRI (%), payback period.
+    Utilise les donnees d'enrichissement (PVGIS productible, distance poste)
+    si disponibles, sinon benchmarks marche France 2024-2026.
+    """
+    result = await db.execute(select(Projet).where(Projet.id == projet_id))
+    projet = result.scalar_one_or_none()
+    if not projet:
+        raise HTTPException(status_code=404, detail="Projet non trouve")
+
+    metadata = projet.metadata_ or {}
+    enrichment_data = metadata.get("enrichment")
+
+    filiere = projet.filiere or "solaire_sol"
+    puissance = float(projet.puissance_mwc) if projet.puissance_mwc else 1.0
+    surface = float(projet.surface_ha) if projet.surface_ha else None
+
+    financial = estimate_financial(
+        filiere=filiere,
+        puissance_mwc=puissance,
+        surface_ha=surface,
+        enrichment_data=enrichment_data,
+    )
+
+    return {
+        "projet_id": str(projet.id),
+        "projet_nom": projet.nom,
+        "filiere": filiere,
+        "puissance_mwc": puissance,
+        "surface_ha": surface,
+        "enriched": enrichment_data is not None,
+        **financial,
+    }
+
+
+# ─── PDF Report ───
+
+
+@router.post("/projets/{projet_id}/report")
+async def generate_report(projet_id: str, db: AsyncSession = Depends(get_db)):
+    """Generate a PDF feasibility report for a project.
+
+    Combines enrichment + regulatory + financial data into a single
+    exportable PDF report. Returns the PDF as binary response.
+    """
+    result = await db.execute(select(Projet).where(Projet.id == projet_id))
+    projet = result.scalar_one_or_none()
+    if not projet:
+        raise HTTPException(status_code=404, detail="Projet non trouve")
+
+    metadata = projet.metadata_ or {}
+    enrichment_data = metadata.get("enrichment")
+
+    filiere = projet.filiere or "solaire_sol"
+    puissance = float(projet.puissance_mwc) if projet.puissance_mwc else 1.0
+    surface = float(projet.surface_ha) if projet.surface_ha else None
+
+    # Gather all analysis data
+    regulatory = analyze_regulatory(
+        filiere=filiere, puissance_mwc=puissance,
+        surface_ha=surface, enrichment_data=enrichment_data,
+    )
+    financial = estimate_financial(
+        filiere=filiere, puissance_mwc=puissance,
+        surface_ha=surface, enrichment_data=enrichment_data,
+    )
+
+    # Build project info dict
+    coord_result = await db.execute(
+        text("SELECT ST_X(geom) as lon, ST_Y(geom) as lat FROM projets WHERE id = :id"),
+        {"id": str(projet.id)},
+    )
+    coord_row = coord_result.mappings().first()
+
+    project_info = {
+        "id": str(projet.id),
+        "nom": projet.nom,
+        "filiere": filiere,
+        "puissance_mwc": puissance,
+        "surface_ha": surface,
+        "commune": projet.commune,
+        "departement": projet.departement,
+        "region": projet.region,
+        "lat": float(coord_row["lat"]) if coord_row and coord_row["lat"] else None,
+        "lon": float(coord_row["lon"]) if coord_row and coord_row["lon"] else None,
+    }
+
+    from app.services.report import generate_pdf_report
+    pdf_bytes = generate_pdf_report(
+        project_info=project_info,
+        enrichment_data=enrichment_data,
+        regulatory_data=regulatory,
+        financial_data=financial,
+    )
+
+    filename = f"proxiam_rapport_{projet.nom.replace(' ', '_')}_{datetime.now().strftime('%Y%m%d')}.pdf"
+
+    await create_notification(
+        db, type="report_generated",
+        title=f"Rapport genere : {projet.nom}",
+        message="Rapport de faisabilite PDF telecharge",
+        entity_type="projet", entity_id=str(projet.id),
+    )
+
+    return Response(
+        content=pdf_bytes,
+        media_type="application/pdf",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )

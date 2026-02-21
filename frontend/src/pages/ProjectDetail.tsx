@@ -44,6 +44,10 @@ import {
   Timer,
   Lightbulb,
   ChevronRight,
+  DollarSign,
+  TrendingUp,
+  PiggyBank,
+  BarChart3,
 } from "lucide-react";
 import api from "../lib/api";
 import ProjectForm from "../components/ProjectForm";
@@ -338,7 +342,7 @@ function ghiBg(ghi: number | null): string {
   return "bg-red-50";
 }
 
-type TabKey = "overview" | "phases" | "score" | "regulatory" | "ai" | "documents";
+type TabKey = "overview" | "phases" | "score" | "regulatory" | "financial" | "ai" | "documents";
 
 export default function ProjectDetail() {
   const { id } = useParams<{ id: string }>();
@@ -435,6 +439,79 @@ export default function ProjectDetail() {
     estimated_delai_max_mois: number;
   }
 
+  // Sprint 15: Financial estimation
+  interface FinancialCapex {
+    installation_eur: { min: number; median: number; max: number };
+    raccordement_eur: number;
+    total_eur: number;
+    eur_par_kwc: number;
+    tendance: string;
+    source: string;
+  }
+
+  interface FinancialData {
+    projet_id: string;
+    projet_nom: string;
+    filiere: string;
+    puissance_mwc: number;
+    enriched: boolean;
+    capex: FinancialCapex;
+    opex: { annuel_eur: number; pct_capex: number; lifetime_total_eur: number };
+    revenus: {
+      annuel_eur: number;
+      production_mwh_an?: number;
+      prix_moyen_mwh?: number;
+      mecanisme: string;
+      detail: Record<string, number>;
+    };
+    lcoe_eur_mwh: number;
+    tri: {
+      tri_pct: number;
+      payback_years: number | null;
+      rentable: boolean;
+      cashflow_annuel_eur: number;
+    };
+    lifetime_years: number;
+    assumptions: {
+      discount_rate_pct: number;
+      productible_source: string;
+      distance_poste_km: number | null;
+      bess_heures_stockage: number | null;
+    };
+    disclaimer: string;
+  }
+
+  const { data: financial } = useQuery<FinancialData>({
+    queryKey: ["projet-financial", id],
+    queryFn: async () => {
+      const res = await api.get(`/api/projets/${id}/financial`);
+      return res.data;
+    },
+    enabled: !!id && activeTab === "financial",
+  });
+
+  const [reportLoading, setReportLoading] = useState(false);
+
+  const handleDownloadReport = async () => {
+    if (!id) return;
+    setReportLoading(true);
+    try {
+      const res = await api.post(`/api/projets/${id}/report`, null, {
+        responseType: "blob",
+      });
+      const url = URL.createObjectURL(new Blob([res.data], { type: "application/pdf" }));
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = `proxiam_rapport_${projet?.nom?.replace(/\s/g, "_") || "projet"}.pdf`;
+      link.click();
+      URL.revokeObjectURL(url);
+    } catch {
+      // handled by error boundary
+    } finally {
+      setReportLoading(false);
+    }
+  };
+
   const { data: regulatory } = useQuery<RegulatoryData>({
     queryKey: ["projet-regulatory", id],
     queryFn: async () => {
@@ -474,6 +551,7 @@ export default function ProjectDetail() {
     { key: "phases", label: t("projects.tabPhases") },
     { key: "score", label: t("projects.tabScore") },
     { key: "regulatory", label: t("regulatory.tabLabel") },
+    { key: "financial", label: t("financial.tabLabel") },
     { key: "ai", label: t("ai.tabLabel") },
     { key: "documents", label: t("documents.tabLabel") },
   ];
@@ -1198,6 +1276,257 @@ export default function ProjectDetail() {
                 <div className="card border border-blue-200 bg-blue-50/50 dark:border-blue-500/20 dark:bg-blue-500/5">
                   <p className="text-xs text-blue-700 dark:text-blue-400">
                     {t("regulatory.enrichForBetter")}
+                  </p>
+                </div>
+              )}
+            </>
+          )}
+        </div>
+      )}
+
+      {/* Tab: Financial */}
+      {activeTab === "financial" && (
+        <div className="space-y-4">
+          {!financial ? (
+            <div className="card flex items-center justify-center py-12 text-slate-400">
+              <Loader2 className="mr-2 h-5 w-5 animate-spin" />
+              {t("financial.loading")}
+            </div>
+          ) : (
+            <>
+              {/* TRI / Rentability banner */}
+              <div
+                className={`card border-l-4 ${
+                  financial.tri.rentable
+                    ? "border-l-emerald-500 bg-emerald-50 dark:bg-emerald-500/5"
+                    : "border-l-red-500 bg-red-50 dark:bg-red-500/5"
+                }`}
+              >
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    <TrendingUp
+                      className={`h-5 w-5 ${
+                        financial.tri.rentable ? "text-emerald-500" : "text-red-500"
+                      }`}
+                    />
+                    <div>
+                      <h3 className="text-sm font-semibold text-slate-800 dark:text-slate-200">
+                        TRI{" "}
+                        <span
+                          className={`inline-block rounded-full px-2 py-0.5 text-lg font-bold font-mono ${
+                            financial.tri.rentable
+                              ? "text-emerald-700 dark:text-emerald-400"
+                              : "text-red-700 dark:text-red-400"
+                          }`}
+                        >
+                          {financial.tri.tri_pct}%
+                        </span>
+                      </h3>
+                      <p className="text-xs text-slate-500 dark:text-slate-400">
+                        {financial.tri.rentable
+                          ? t("financial.profitable")
+                          : t("financial.notProfitable")}
+                        {financial.tri.payback_years && (
+                          <span className="ml-2">
+                            · Payback: {financial.tri.payback_years} {t("financial.years")}
+                          </span>
+                        )}
+                      </p>
+                    </div>
+                  </div>
+                  {/* Export PDF button */}
+                  <button
+                    onClick={handleDownloadReport}
+                    disabled={reportLoading}
+                    className="flex items-center gap-1.5 rounded-lg bg-indigo-500 px-3 py-1.5 text-xs font-medium text-white hover:bg-indigo-600 disabled:opacity-50"
+                  >
+                    {reportLoading ? (
+                      <Loader2 className="h-3 w-3 animate-spin" />
+                    ) : (
+                      <Download className="h-3 w-3" />
+                    )}
+                    {t("financial.exportPdf")}
+                  </button>
+                </div>
+              </div>
+
+              {/* Key metrics cards */}
+              <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+                <div className="card text-center">
+                  <DollarSign className="mx-auto h-5 w-5 text-blue-500" />
+                  <p className="mt-1 text-xs text-slate-400">CAPEX</p>
+                  <p className="text-lg font-bold font-mono text-slate-800 dark:text-slate-200">
+                    {(financial.capex.total_eur / 1_000_000).toFixed(1)}M
+                  </p>
+                  <p className="text-[10px] text-slate-400">EUR</p>
+                </div>
+                <div className="card text-center">
+                  <PiggyBank className="mx-auto h-5 w-5 text-amber-500" />
+                  <p className="mt-1 text-xs text-slate-400">{t("financial.annualRevenue")}</p>
+                  <p className="text-lg font-bold font-mono text-slate-800 dark:text-slate-200">
+                    {(financial.revenus.annuel_eur / 1_000).toFixed(0)}k
+                  </p>
+                  <p className="text-[10px] text-slate-400">EUR/an</p>
+                </div>
+                <div className="card text-center">
+                  <BarChart3 className="mx-auto h-5 w-5 text-teal-500" />
+                  <p className="mt-1 text-xs text-slate-400">LCOE</p>
+                  <p className="text-lg font-bold font-mono text-slate-800 dark:text-slate-200">
+                    {financial.lcoe_eur_mwh || "—"}
+                  </p>
+                  <p className="text-[10px] text-slate-400">EUR/MWh</p>
+                </div>
+                <div className="card text-center">
+                  <TrendingUp className="mx-auto h-5 w-5 text-emerald-500" />
+                  <p className="mt-1 text-xs text-slate-400">{t("financial.annualCashflow")}</p>
+                  <p className="text-lg font-bold font-mono text-slate-800 dark:text-slate-200">
+                    {(financial.tri.cashflow_annuel_eur / 1_000).toFixed(0)}k
+                  </p>
+                  <p className="text-[10px] text-slate-400">EUR/an</p>
+                </div>
+              </div>
+
+              {/* CAPEX Detail */}
+              <div className="card">
+                <h3 className="mb-3 flex items-center gap-2 text-sm font-semibold text-slate-700 dark:text-slate-300">
+                  <DollarSign className="h-4 w-4 text-blue-500" />
+                  {t("financial.capexTitle")}
+                </h3>
+                <div className="space-y-2 text-sm">
+                  <div className="flex justify-between">
+                    <span className="text-slate-500">{t("financial.installation")}</span>
+                    <span className="font-mono text-slate-800 dark:text-slate-200">
+                      {(financial.capex.installation_eur.median / 1_000_000).toFixed(2)} M EUR
+                    </span>
+                  </div>
+                  <div className="flex justify-between text-xs text-slate-400">
+                    <span>{t("financial.range")}</span>
+                    <span className="font-mono">
+                      {(financial.capex.installation_eur.min / 1_000_000).toFixed(2)} — {(financial.capex.installation_eur.max / 1_000_000).toFixed(2)} M EUR
+                    </span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-slate-500">{t("financial.raccordement")}</span>
+                    <span className="font-mono text-slate-800 dark:text-slate-200">
+                      {(financial.capex.raccordement_eur / 1_000).toFixed(0)} k EUR
+                    </span>
+                  </div>
+                  <div className="flex justify-between border-t border-slate-100 pt-2 dark:border-slate-700">
+                    <span className="font-medium text-slate-700 dark:text-slate-300">{t("financial.totalCapex")}</span>
+                    <span className="font-mono font-bold text-slate-900 dark:text-white">
+                      {(financial.capex.total_eur / 1_000_000).toFixed(2)} M EUR
+                    </span>
+                  </div>
+                  <div className="flex justify-between text-xs">
+                    <span className="text-slate-400">{t("financial.unitCost")}</span>
+                    <span className="font-mono text-slate-500">{financial.capex.eur_par_kwc} EUR/kWc</span>
+                  </div>
+                  <div className="flex justify-between text-xs">
+                    <span className="text-slate-400">{t("financial.trend")}</span>
+                    <span className="text-slate-500">{financial.capex.tendance}</span>
+                  </div>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+                {/* OPEX */}
+                <div className="card">
+                  <h3 className="mb-3 flex items-center gap-2 text-sm font-semibold text-slate-700 dark:text-slate-300">
+                    <RefreshCw className="h-4 w-4 text-amber-500" />
+                    {t("financial.opexTitle")}
+                  </h3>
+                  <div className="space-y-2 text-sm">
+                    <div className="flex justify-between">
+                      <span className="text-slate-500">{t("financial.annualOpex")}</span>
+                      <span className="font-mono font-medium text-slate-800 dark:text-slate-200">
+                        {(financial.opex.annuel_eur / 1_000).toFixed(0)} k EUR/an
+                      </span>
+                    </div>
+                    <div className="flex justify-between text-xs">
+                      <span className="text-slate-400">% CAPEX</span>
+                      <span className="font-mono text-slate-500">{financial.opex.pct_capex}%</span>
+                    </div>
+                    <div className="flex justify-between text-xs">
+                      <span className="text-slate-400">{t("financial.lifetimeOpex")}</span>
+                      <span className="font-mono text-slate-500">
+                        {(financial.opex.lifetime_total_eur / 1_000_000).toFixed(1)} M EUR
+                      </span>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Revenus */}
+                <div className="card">
+                  <h3 className="mb-3 flex items-center gap-2 text-sm font-semibold text-slate-700 dark:text-slate-300">
+                    <PiggyBank className="h-4 w-4 text-emerald-500" />
+                    {t("financial.revenueTitle")}
+                  </h3>
+                  <div className="space-y-2 text-sm">
+                    <div className="flex justify-between">
+                      <span className="text-slate-500">{t("financial.annualRevenue")}</span>
+                      <span className="font-mono font-bold text-emerald-600 dark:text-emerald-400">
+                        {(financial.revenus.annuel_eur / 1_000).toFixed(0)} k EUR/an
+                      </span>
+                    </div>
+                    {financial.revenus.production_mwh_an && (
+                      <div className="flex justify-between text-xs">
+                        <span className="text-slate-400">{t("financial.production")}</span>
+                        <span className="font-mono text-slate-500">
+                          {financial.revenus.production_mwh_an} MWh/an
+                        </span>
+                      </div>
+                    )}
+                    {financial.revenus.prix_moyen_mwh && (
+                      <div className="flex justify-between text-xs">
+                        <span className="text-slate-400">{t("financial.avgPrice")}</span>
+                        <span className="font-mono text-slate-500">
+                          {financial.revenus.prix_moyen_mwh} EUR/MWh
+                        </span>
+                      </div>
+                    )}
+                    <div className="flex justify-between text-xs">
+                      <span className="text-slate-400">{t("financial.mechanism")}</span>
+                      <span className="text-slate-500">{financial.revenus.mecanisme}</span>
+                    </div>
+                    {/* Revenue detail by mechanism */}
+                    <div className="mt-2 space-y-1 border-t border-slate-100 pt-2 dark:border-slate-700">
+                      {Object.entries(financial.revenus.detail).map(([key, val]) => (
+                        <div key={key} className="flex justify-between text-xs">
+                          <span className="text-slate-400 uppercase">{key}</span>
+                          <span className="font-mono text-slate-500">
+                            {(val / 1_000).toFixed(0)} k EUR
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Assumptions */}
+              <div className="card border border-slate-200 dark:border-slate-700">
+                <h3 className="mb-2 text-xs font-semibold text-slate-500 uppercase">{t("financial.assumptions")}</h3>
+                <div className="flex flex-wrap gap-3 text-xs text-slate-400">
+                  <span>{t("financial.discountRate")}: {financial.assumptions.discount_rate_pct}%</span>
+                  <span>· {t("financial.lifetime")}: {financial.lifetime_years} {t("financial.years")}</span>
+                  <span>· {t("financial.productibleSource")}: {financial.assumptions.productible_source}</span>
+                  {financial.assumptions.distance_poste_km && (
+                    <span>· {t("financial.distPoste")}: {financial.assumptions.distance_poste_km} km</span>
+                  )}
+                  {financial.assumptions.bess_heures_stockage && (
+                    <span>· Stockage: {financial.assumptions.bess_heures_stockage}h</span>
+                  )}
+                </div>
+                <p className="mt-2 text-[10px] italic text-slate-300 dark:text-slate-600">
+                  {financial.disclaimer}
+                </p>
+              </div>
+
+              {/* Enrichment prompt */}
+              {!financial.enriched && (
+                <div className="card border border-blue-200 bg-blue-50/50 dark:border-blue-500/20 dark:bg-blue-500/5">
+                  <p className="text-xs text-blue-700 dark:text-blue-400">
+                    {t("financial.enrichForBetter")}
                   </p>
                 </div>
               )}

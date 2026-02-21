@@ -71,6 +71,8 @@ async def list_projets(
     filiere: Optional[str] = None,
     statut: Optional[str] = None,
     region: Optional[str] = None,
+    score_min: Optional[int] = Query(None, ge=0, le=100),
+    score_max: Optional[int] = Query(None, ge=0, le=100),
     limit: int = Query(50, le=200),
     offset: int = Query(0, ge=0),
     db: AsyncSession = Depends(get_db),
@@ -87,6 +89,12 @@ async def list_projets(
     if region:
         conditions.append("region = :region")
         params["region"] = region
+    if score_min is not None:
+        conditions.append("score_global >= :score_min")
+        params["score_min"] = score_min
+    if score_max is not None:
+        conditions.append("score_global <= :score_max")
+        params["score_max"] = score_max
 
     where = " AND ".join(conditions)
     query = text(f"""

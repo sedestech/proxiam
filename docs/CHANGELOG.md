@@ -1,5 +1,38 @@
 # Changelog — Proxiam OS ENR
 
+## [1.3.0] — 2026-02-21 — Sprint 12 : Batch Scoring, Score Filters, Security, Benchmark
+
+### Ajoute
+- **Batch scoring** : endpoint `POST /api/projets/batch-score` (max 20 projets)
+  - Validation Pydantic (min 1, max 20, pas de doublons)
+  - Gestion d'erreur par projet (un echec n'arrete pas le batch)
+  - Notification automatique avec resume des scores
+- **Score range filters** : `GET /api/projets?score_min=X&score_max=Y`
+  - Validation 0-100 sur les bornes
+  - Persistence URL compatible avec le dashboard
+- **Dashboard interactif** : clic sur bucket score → navigation vers Projects avec filtre
+- **Batch UI** : checkboxes multi-selection + bouton Score avec compteur
+  - Select all / deselect all dans le header du tableau
+  - Badge filtre score avec bouton de suppression
+- **Benchmark concurrentiel** : analyse de 22 outils ENR dans `docs/BENCHMARK_CONCURRENTIEL_ENR.md`
+  - Positionnement unique de Proxiam (Knowledge Graph 6D + GIS + IA)
+
+### Securite
+- Refactoring DRY des helpers `_extract_coords` et `_score_and_persist`
+- Validation stricte Pydantic sur BatchScoreRequest (max_length, no duplicates)
+- Try/except par projet dans le batch (isolation des erreurs)
+- Logging des erreurs de scoring
+
+### i18n
+- 3 cles FR/EN ajoutees : `batchScore`, `batchScoring`, `scoreRange`
+
+### Tests
+- Backend : +18 tests batch scoring + score range filters (`test_batch_scoring.py`)
+- Frontend : +22 tests logique batch UI (`BatchScoring.test.ts`)
+- Total : 362 tests (136 backend + 226 frontend)
+
+---
+
 ## [1.2.0] — 2026-02-20 — Sprint 11 : Search, Filters, Analytics, Mobile
 
 ### Ajoute

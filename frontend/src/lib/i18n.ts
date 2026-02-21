@@ -133,6 +133,9 @@ const resources = {
         overall: "Avancement global",
         blocsCompleted: "blocs termines",
         workflowTitle: "Workflow B1 - B8",
+        batchScore: "Scorer",
+        batchScoring: "Scoring en cours...",
+        scoreRange: "Plage de score",
       },
       veille: {
         title: "Veille Sources",
@@ -378,6 +381,9 @@ const resources = {
         overall: "Overall progress",
         blocsCompleted: "blocs completed",
         workflowTitle: "Workflow B1 - B8",
+        batchScore: "Score",
+        batchScoring: "Scoring...",
+        scoreRange: "Score range",
       },
       veille: {
         title: "Watch Sources",

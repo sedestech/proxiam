@@ -1,6 +1,6 @@
 import { useTranslation } from "react-i18next";
 import { useQuery } from "@tanstack/react-query";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import {
   PieChart,
   Pie,
@@ -112,6 +112,7 @@ function filiereIcon(filiere: string | null) {
 
 export default function Dashboard() {
   const { t } = useTranslation();
+  const navigate = useNavigate();
 
   const { data: stats } = useQuery<Stats>({
     queryKey: ["stats"],
@@ -406,7 +407,18 @@ export default function Dashboard() {
           </h2>
           {analytics?.score_distribution && analytics.score_distribution.length > 0 ? (
             <ResponsiveContainer width="100%" height={160}>
-              <BarChart data={analytics.score_distribution} margin={{ left: 0, right: 10, top: 5, bottom: 5 }}>
+              <BarChart
+                data={analytics.score_distribution}
+                margin={{ left: 0, right: 10, top: 5, bottom: 5 }}
+                onClick={(data) => {
+                  if (!data?.activeLabel) return;
+                  const bucket = data.activeLabel;
+                  if (bucket === "unscored") return;
+                  const [min, max] = bucket.split("-").map(Number);
+                  navigate(`/projects?score_min=${min}&score_max=${max}`);
+                }}
+                style={{ cursor: "pointer" }}
+              >
                 <XAxis
                   dataKey="bucket"
                   tick={{ fill: "#64748b", fontSize: 10 }}

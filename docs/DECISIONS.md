@@ -1,5 +1,33 @@
 # Décisions Techniques — Proxiam
 
+## 2026-02-21 : Batch scoring avec validation Pydantic stricte (pas de cap runtime)
+
+**Quoi** : L'endpoint `POST /api/projets/batch-score` valide les entrees via Pydantic (`min_length=1`, `max_length=20`, `field_validator` anti-doublons) plutot qu'un simple slice `[:20]` a l'execution.
+
+**Pourquoi** : La validation Pydantic retourne une erreur 422 claire si le client envoie trop d'IDs ou des doublons, au lieu de silencieusement tronquer. C'est plus securise (pas de parsing de 10 000 IDs en memoire avant le cap) et plus transparent pour le client.
+
+**Alternatives rejetees** :
+- Slice `[:20]` silencieux : le client ne sait pas que ses IDs ont ete ignores
+- Validation manuelle dans la route : duplication du travail que Pydantic fait mieux
+
+## 2026-02-21 : Helpers DRY pour le scoring (_extract_coords + _score_and_persist)
+
+**Quoi** : Extraction des coordonnees PostGIS et du calcul de score dans des fonctions helper reutilisees par le scoring unitaire et le batch.
+
+**Pourquoi** : Le batch scoring dupliquait ~25 lignes du scoring unitaire. Les helpers garantissent que le meme algorithme est utilise partout et facilitent les futures evolutions du scoring.
+
+## 2026-02-21 : Try/except par projet dans le batch (pas de fail-fast)
+
+**Quoi** : Chaque projet est score dans un try/except individuel. Si un projet echoue, les autres continuent.
+
+**Pourquoi** : Un batch de 20 projets ne doit pas echouer completement parce qu'un seul a une geometrie corrompue. Le client recoit un resultat partiel avec les erreurs detaillees par projet.
+
+## 2026-02-21 : Benchmark concurrentiel integre a la documentation
+
+**Quoi** : Analyse de 22 outils ENR concurrents dans `docs/BENCHMARK_CONCURRENTIEL_ENR.md` avec positionnement SWOT et recommandations strategiques.
+
+**Pourquoi** : Identifier les differenciateurs de Proxiam (Knowledge Graph 6D, focus France, integration SIG+IA) pour guider les prochains sprints et le discours commercial. Aucun concurrent ne combine knowledge base structuree + GIS + IA dans un seul outil.
+
 ## 2026-02-20 : Filtres projets persistes dans l'URL (pas useState)
 
 **Quoi** : Les filtres (filiere, statut, recherche, tri) de la page Projets utilisent `useSearchParams` au lieu de `useState`, rendant l'etat visible dans l'URL.

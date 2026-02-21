@@ -20,6 +20,8 @@ import {
   CheckCircle2,
   ArrowUpDown,
   Search,
+  Target,
+  Loader2,
 } from "lucide-react";
 import api from "../lib/api";
 import ProjectForm from "../components/ProjectForm";
@@ -98,6 +100,8 @@ export default function Projects() {
   const filterSearch = searchParams.get("q") || "";
   const sortBy = searchParams.get("sort") || "nom";
   const sortDir = searchParams.get("dir") || "asc";
+  const scoreMin = searchParams.get("score_min") || "";
+  const scoreMax = searchParams.get("score_max") || "";
 
   function setFilter(key: string, value: string) {
     const params = new URLSearchParams(searchParams);
@@ -108,6 +112,8 @@ export default function Projects() {
     }
     setSearchParams(params, { replace: true });
   }
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [batchScoring, setBatchScoring] = useState(false);
   const [showForm, setShowForm] = useState(false);
   const [showImport, setShowImport] = useState(false);
   const [importFile, setImportFile] = useState<File | null>(null);
@@ -119,11 +125,13 @@ export default function Projects() {
   } | null>(null);
 
   const { data: projets, isLoading, isError, refetch } = useQuery<Projet[]>({
-    queryKey: ["projets", filterFiliere, filterStatut],
+    queryKey: ["projets", filterFiliere, filterStatut, scoreMin, scoreMax],
     queryFn: async () => {
       const params: Record<string, string> = {};
       if (filterFiliere) params.filiere = filterFiliere;
       if (filterStatut) params.statut = filterStatut;
+      if (scoreMin) params.score_min = scoreMin;
+      if (scoreMax) params.score_max = scoreMax;
       const res = await api.get("/api/projets", { params });
       return res.data;
     },
@@ -174,6 +182,30 @@ export default function Projects() {
           </p>
         </div>
         <div className="flex items-center gap-2">
+          {selectedIds.size > 0 && (
+            <button
+              disabled={batchScoring}
+              onClick={async () => {
+                setBatchScoring(true);
+                try {
+                  await api.post("/api/projets/batch-score", {
+                    projet_ids: Array.from(selectedIds),
+                  });
+                  queryClient.invalidateQueries({ queryKey: ["projets"] });
+                  queryClient.invalidateQueries({ queryKey: ["projets-stats"] });
+                  setSelectedIds(new Set());
+                } finally {
+                  setBatchScoring(false);
+                }
+              }}
+              className="flex items-center gap-2 rounded-lg bg-emerald-500 px-3 py-2 text-sm font-medium text-white hover:bg-emerald-600 disabled:opacity-50"
+            >
+              {batchScoring ? <Loader2 className="h-4 w-4 animate-spin" /> : <Target className="h-4 w-4" />}
+              <span className="hidden sm:inline">
+                Score ({selectedIds.size})
+              </span>
+            </button>
+          )}
           <button
             onClick={() => {
               setShowImport(true);
@@ -290,6 +322,20 @@ export default function Projects() {
             {sortBy === "nom" ? t("projects.project") : sortBy === "score" ? t("common.score") : "MWc"}
           </span>
         </button>
+        {(scoreMin || scoreMax) && (
+          <button
+            onClick={() => {
+              const params = new URLSearchParams(searchParams);
+              params.delete("score_min");
+              params.delete("score_max");
+              setSearchParams(params, { replace: true });
+            }}
+            className="flex h-8 items-center gap-1.5 rounded-lg bg-primary-50 px-3 text-xs font-medium text-primary-700 hover:bg-primary-100 dark:bg-primary-500/10 dark:text-primary-400"
+          >
+            Score: {scoreMin}–{scoreMax}
+            <span className="ml-1">&times;</span>
+          </button>
+        )}
       </div>
 
       {/* Loading */}
@@ -354,6 +400,20 @@ export default function Projects() {
           <table className="w-full">
             <thead>
               <tr className="border-b border-slate-100 bg-slate-50/50 dark:border-slate-700 dark:bg-slate-800/50">
+                <th className="w-10 px-3 py-3">
+                  <input
+                    type="checkbox"
+                    checked={filteredProjets.length > 0 && selectedIds.size === filteredProjets.length}
+                    onChange={(e) => {
+                      if (e.target.checked) {
+                        setSelectedIds(new Set(filteredProjets.map((p) => p.id)));
+                      } else {
+                        setSelectedIds(new Set());
+                      }
+                    }}
+                    className="h-4 w-4 rounded border-slate-300 text-primary-500 focus:ring-primary-400"
+                  />
+                </th>
                 <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-slate-500">
                   {t("projects.project")}
                 </th>
@@ -378,6 +438,19 @@ export default function Projects() {
                   key={p.id}
                   className="group hover:bg-slate-50 dark:hover:bg-slate-700/50 transition-colors"
                 >
+                  <td className="px-3 py-3">
+                    <input
+                      type="checkbox"
+                      checked={selectedIds.has(p.id)}
+                      onChange={() => {
+                        const next = new Set(selectedIds);
+                        if (next.has(p.id)) next.delete(p.id);
+                        else next.add(p.id);
+                        setSelectedIds(next);
+                      }}
+                      className="h-4 w-4 rounded border-slate-300 text-primary-500 focus:ring-primary-400"
+                    />
+                  </td>
                   <td className="px-4 py-3">
                     <Link
                       to={`/projects/${p.id}`}

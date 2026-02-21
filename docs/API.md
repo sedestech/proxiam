@@ -38,9 +38,21 @@ ReDoc : `http://localhost:8000/api/redoc`
 
 | Method | Route | Params | Description |
 |--------|-------|--------|-------------|
-| GET | `/api/projets` | `filiere`, `statut`, `region`, `limit`, `offset` | Liste des projets |
+| GET | `/api/projets` | `filiere`, `statut`, `region`, `score_min`, `score_max`, `limit`, `offset` | Liste des projets (filtres combinables) |
 | GET | `/api/projets/{id}` | — | Détail d'un projet |
+| POST | `/api/projets` | Body JSON | Créer un projet |
+| PUT | `/api/projets/{id}` | Body JSON | Modifier un projet |
+| DELETE | `/api/projets/{id}` | — | Supprimer un projet (cascade) |
+| GET | `/api/projets/{id}/phases` | — | Phases B1-B8 avec progression |
+| PUT | `/api/projets/{id}/phases/{bloc}` | `completion_pct` (0-100) | Mettre à jour la progression d'un bloc |
+| GET | `/api/projets/stats/summary` | — | KPIs portefeuille (total, MWc, score moyen) |
+| GET | `/api/projets/stats/analytics` | — | Distribution scores, performance filière, activité |
+| GET | `/api/projets/export/csv` | — | Export CSV (délimiteur ;) |
+| POST | `/api/projets/import` | Fichier CSV/JSON (multipart) | Import bulk (max 500 lignes) |
 | POST | `/api/projets/{id}/score` | — | Calcul du score 0-100 (Sprint 3) |
+| GET | `/api/projets/{id}/score` | — | Récupérer le dernier score calculé |
+| POST | `/api/projets/batch-score` | Body: `{"projet_ids": [...]}` (max 20) | Scoring batch — Sprint 12 |
+| GET | `/api/scoring/weights` | — | Configuration des poids par filière |
 
 ### Géospatial
 

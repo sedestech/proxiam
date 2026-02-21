@@ -1,9 +1,10 @@
-"""Enrichment API routes — Sprint 13.
+"""Enrichment & Regulatory API routes — Sprint 13-14.
 
 Endpoints:
   POST /api/projets/{id}/enrich       — enrich a single project
   POST /api/projets/batch-enrich      — enrich multiple projects (max 20)
   GET  /api/projets/{id}/enrichment   — retrieve enrichment data
+  GET  /api/projets/{id}/regulatory   — regulatory analysis with expert tips
 """
 import logging
 from datetime import datetime, timezone
@@ -18,6 +19,7 @@ from app.database import get_db
 from app.models import Projet
 from app.services.pvgis import get_pvgis_data
 from app.services.constraints import get_constraints, get_nearest_postes
+from app.services.regulatory import analyze_regulatory
 from app.routes.notifications import create_notification
 
 logger = logging.getLogger(__name__)
@@ -191,4 +193,46 @@ async def get_enrichment(projet_id: str, db: AsyncSession = Depends(get_db)):
         "projet_id": str(projet_id),
         "enriched": True,
         **enrichment,
+    }
+
+
+# ─── Regulatory analysis ───
+
+
+@router.get("/projets/{projet_id}/regulatory")
+async def get_regulatory(projet_id: str, db: AsyncSession = Depends(get_db)):
+    """Analyse réglementaire complète d'un projet.
+
+    Retourne les obligations applicables (ICPE, EIE, PC, AE, raccordement),
+    la timeline estimée, les conseils experts terrain, et le niveau de risque
+    réglementaire. Utilise les données d'enrichissement si disponibles.
+    """
+    result = await db.execute(select(Projet).where(Projet.id == projet_id))
+    projet = result.scalar_one_or_none()
+    if not projet:
+        raise HTTPException(status_code=404, detail="Projet non trouve")
+
+    # Load enrichment data if available
+    metadata = projet.metadata_ or {}
+    enrichment_data = metadata.get("enrichment")
+
+    filiere = projet.filiere or "solaire_sol"
+    puissance = projet.puissance_mwc or 1.0
+    surface = projet.surface_ha
+
+    analysis = analyze_regulatory(
+        filiere=filiere,
+        puissance_mwc=puissance,
+        surface_ha=surface,
+        enrichment_data=enrichment_data,
+    )
+
+    return {
+        "projet_id": str(projet.id),
+        "projet_nom": projet.nom,
+        "filiere": filiere,
+        "puissance_mwc": puissance,
+        "surface_ha": surface,
+        "enriched": enrichment_data is not None,
+        **analysis,
     }

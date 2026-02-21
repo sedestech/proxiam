@@ -1,11 +1,15 @@
-"""AI service — Sprint 5.
+"""AI service — Sprint 5 + Sprint 14 (expert consultant).
 
 Provides project analysis using Anthropic Claude API.
 Falls back to template-based analysis when no API key is configured.
 
+Sprint 14: Enhanced to act as a senior ENR consultant with:
+- Enrichment data context (PVGIS, constraints, postes)
+- Regulatory analysis context
+- Practical tips and field experience (AVEIL-style)
+
 Functions:
   analyze_project  — full project analysis with recommendations
-  summarize_risks  — risk summary for a project
 """
 from typing import Optional, Dict, Any, List
 
@@ -154,12 +158,86 @@ def _score_insight(criterion: str, value: int) -> str:
     return insights.get(criterion, {}).get(level, f"{criterion}: {value}/100")
 
 
+def _build_enrichment_context(enrichment_data: Optional[Dict]) -> str:
+    """Build context string from enrichment data for the AI prompt."""
+    if not enrichment_data:
+        return ""
+
+    parts = []
+    pvgis = enrichment_data.get("pvgis", {})
+    if pvgis:
+        ghi = pvgis.get("ghi_kwh_m2_an")
+        prod = pvgis.get("productible_kwh_kwc_an")
+        temp = pvgis.get("temperature_moyenne")
+        source = pvgis.get("source", "inconnu")
+        parts.append(f"\nDonnees solaires (source: {source}):")
+        if ghi:
+            parts.append(f"  - GHI: {ghi} kWh/m2/an")
+        if prod:
+            parts.append(f"  - Productible: {prod} kWh/kWc/an")
+        if temp:
+            parts.append(f"  - Temperature moyenne: {temp} C")
+
+    constraints = enrichment_data.get("constraints", {})
+    summary = constraints.get("summary", {})
+    if summary:
+        total = summary.get("total_constraints", 0)
+        in_zone = summary.get("in_zone", 0)
+        nearby = summary.get("nearby", 0)
+        parts.append(f"\nContraintes environnementales:")
+        parts.append(f"  - Total: {total} (en zone: {in_zone}, a proximite: {nearby})")
+
+        for zone_type in ["natura2000", "znieff"]:
+            zones = constraints.get(zone_type, [])
+            for z in zones[:3]:
+                status = "EN ZONE" if z.get("intersection") else f"a {z.get('distance_m', '?')}m"
+                parts.append(f"  - {zone_type}: {z.get('nom', '?')} ({status})")
+
+    postes = enrichment_data.get("nearest_postes", [])
+    if postes:
+        parts.append(f"\nPostes sources les plus proches:")
+        for p in postes[:3]:
+            parts.append(
+                f"  - {p.get('nom', '?')} ({p.get('gestionnaire', '?')}) "
+                f"a {p.get('distance_km', '?')} km, "
+                f"{p.get('capacite_disponible_mw', '?')} MW disponibles"
+            )
+
+    return "\n".join(parts)
+
+
+def _build_regulatory_context(regulatory_data: Optional[Dict]) -> str:
+    """Build context string from regulatory analysis for the AI prompt."""
+    if not regulatory_data:
+        return ""
+
+    parts = ["\nAnalyse reglementaire:"]
+    parts.append(f"  Risque reglementaire: {regulatory_data.get('risk_level', '?')}")
+    parts.append(f"  Zone sensible: {'Oui' if regulatory_data.get('zone_sensible') else 'Non'}")
+
+    obligations = regulatory_data.get("obligations", [])
+    if obligations:
+        parts.append(f"  Obligations ({len(obligations)}):")
+        for obl in obligations:
+            parts.append(
+                f"    - {obl.get('label', '?')} "
+                f"(delai: ~{obl.get('delai_mois', '?')} mois)"
+            )
+
+    return "\n".join(parts)
+
+
 def _template_analysis(
     project_data: Dict[str, Any],
     score_data: Optional[Dict[str, Any]] = None,
     phases_data: Optional[List[Dict[str, Any]]] = None,
+    enrichment_data: Optional[Dict[str, Any]] = None,
+    regulatory_data: Optional[Dict[str, Any]] = None,
 ) -> Dict[str, Any]:
-    """Generate template-based analysis without calling Claude API."""
+    """Generate template-based analysis without calling Claude API.
+
+    Sprint 14: Enhanced with enrichment and regulatory context.
+    """
     filiere = project_data.get("filiere", "")
     recs = FILIERE_RECOMMENDATIONS.get(filiere, DEFAULT_RECOMMENDATIONS)
 
@@ -184,6 +262,44 @@ def _template_analysis(
             f"{in_progress} en cours"
         )
 
+    # Enrich strengths/risks/next_steps with real data
+    strengths = list(recs["strengths"])
+    risks = list(recs["risks"])
+    next_steps = list(recs["next_steps"])
+
+    if enrichment_data:
+        pvgis = enrichment_data.get("pvgis", {})
+        ghi = pvgis.get("ghi_kwh_m2_an")
+        if ghi and ghi >= 1400:
+            strengths.insert(0, f"Excellent GHI de {ghi} kWh/m2/an — productible eleve")
+        elif ghi and ghi < 1200:
+            risks.insert(0, f"GHI de {ghi} kWh/m2/an en dessous de la moyenne — productible reduit")
+
+        postes = enrichment_data.get("nearest_postes", [])
+        if postes:
+            p0 = postes[0]
+            dist = p0.get("distance_km", "?")
+            cap = p0.get("capacite_disponible_mw", 0)
+            if cap and cap > 10:
+                strengths.append(f"Poste source a {dist} km avec {cap} MW de capacite disponible")
+            elif dist and float(str(dist)) > 20:
+                risks.append(f"Poste source le plus proche a {dist} km — couts de raccordement eleves")
+
+        constraints = enrichment_data.get("constraints", {}).get("summary", {})
+        in_zone = constraints.get("in_zone", 0)
+        if in_zone > 0:
+            risks.insert(0, f"Projet EN ZONE protegee ({in_zone} intersection{'s' if in_zone > 1 else ''}) — risque reglementaire fort")
+
+    if regulatory_data:
+        risk_level = regulatory_data.get("risk_level", "medium")
+        if risk_level == "high":
+            risks.insert(0, "Risque reglementaire ELEVE — nombreuses obligations, delais longs")
+        obligations = regulatory_data.get("obligations", [])
+        for obl in obligations[:2]:
+            tips = obl.get("tips", [])
+            if tips:
+                next_steps.insert(0, tips[0].replace("Astuce : ", "").replace("Critique : ", ""))
+
     # Overall summary
     score_val = score_data.get("score", 0) if score_data else 0
     if score_val >= 75:
@@ -195,11 +311,16 @@ def _template_analysis(
     else:
         overall = "Ce projet presente des contraintes significatives. Une revision de la strategie est recommandee."
 
+    # Add enrichment-aware summary if data available
+    if enrichment_data and enrichment_data.get("pvgis", {}).get("ghi_kwh_m2_an"):
+        ghi = enrichment_data["pvgis"]["ghi_kwh_m2_an"]
+        overall += f" Irradiation mesuree: {ghi} kWh/m2/an."
+
     return {
         "summary": overall,
-        "strengths": recs["strengths"],
-        "risks": recs["risks"],
-        "next_steps": recs["next_steps"],
+        "strengths": strengths[:5],
+        "risks": risks[:5],
+        "next_steps": next_steps[:6],
         "score_insights": score_insights,
         "phase_summary": phase_summary,
         "source": "template",
@@ -208,47 +329,74 @@ def _template_analysis(
 
 # ─── Claude API ──────────────────────────────────────────────────
 
+SYSTEM_PROMPT = """Tu es un consultant senior en energie renouvelable avec 15 ans d'experience
+en developpement de projets solaires, eoliens et BESS en France. Tu connais parfaitement :
+
+- Le cadre reglementaire francais (ICPE, Code de l'urbanisme, Code de l'environnement)
+- Les procedures administratives (DREAL, DDT, MRAe, CRE, Capareseau)
+- Les aspects techniques (raccordement, PVGIS, etudes de productible)
+- Les aspects financiers (CAPEX/OPEX, LCOE, TRI, mecanismes de marche)
+- Les retours d'experience terrain (pieges frequents, astuces, anticipation)
+
+Tu donnes des conseils PRATIQUES, concrets et actionables — pas de la theorie generique.
+Quand tu identifies un risque, tu donnes immediatement la solution ou l'anticipation.
+Tu fonctionnes comme le site AVEIL : theorie + trucs et astuces d'expert.
+
+Reponds TOUJOURS en francais. Sois direct et utile."""
+
 
 async def _claude_analysis(
     project_data: Dict[str, Any],
     score_data: Optional[Dict[str, Any]] = None,
     phases_data: Optional[List[Dict[str, Any]]] = None,
+    enrichment_data: Optional[Dict[str, Any]] = None,
+    regulatory_data: Optional[Dict[str, Any]] = None,
 ) -> Dict[str, Any]:
-    """Call Claude API for project analysis."""
+    """Call Claude API for project analysis. Sprint 14: expert consultant mode."""
     client = _get_client()
     if not client:
-        return _template_analysis(project_data, score_data, phases_data)
+        return _template_analysis(project_data, score_data, phases_data,
+                                  enrichment_data, regulatory_data)
 
-    prompt = f"""Analyse ce projet d'energie renouvelable et fournis des recommandations.
+    prompt = f"""Analyse ce projet ENR et donne-moi un avis d'expert avec des conseils pratiques.
 
-Projet: {project_data.get('nom', 'Inconnu')}
-Filiere: {project_data.get('filiere', 'Non definie')}
-Puissance: {project_data.get('puissance_mwc', '?')} MWc
-Surface: {project_data.get('surface_ha', '?')} ha
-Commune: {project_data.get('commune', '?')} ({project_data.get('departement', '?')})
-Region: {project_data.get('region', '?')}
-Statut: {project_data.get('statut', '?')}
+PROJET:
+  Nom: {project_data.get('nom', 'Inconnu')}
+  Filiere: {project_data.get('filiere', 'Non definie')}
+  Puissance: {project_data.get('puissance_mwc', '?')} MWc
+  Surface: {project_data.get('surface_ha', '?')} ha
+  Commune: {project_data.get('commune', '?')} ({project_data.get('departement', '?')})
+  Region: {project_data.get('region', '?')}
+  Statut: {project_data.get('statut', '?')}
 """
 
     if score_data:
-        prompt += f"\nScore global: {score_data.get('score', 0)}/100\n"
+        prompt += f"\nSCORE GLOBAL: {score_data.get('score', 0)}/100\n"
         if "details" in score_data:
             for k, v in score_data["details"].items():
                 prompt += f"  - {k}: {v}/100\n"
+        data_sources = score_data.get("data_sources", {})
+        if data_sources:
+            prompt += f"  Sources de donnees: {data_sources}\n"
+
+    prompt += _build_enrichment_context(enrichment_data)
+    prompt += _build_regulatory_context(regulatory_data)
 
     if phases_data:
-        prompt += "\nProgression des blocs:\n"
+        prompt += "\nPROGRESSION:\n"
         for p in phases_data:
             prompt += f"  - {p['code']}: {p.get('completion_pct', 0)}% ({p.get('statut', '?')})\n"
 
     prompt += """
+
 Reponds en JSON strict avec ces champs:
 {
-  "summary": "Resume en 2-3 phrases",
-  "strengths": ["Force 1", "Force 2", "Force 3"],
-  "risks": ["Risque 1", "Risque 2", "Risque 3"],
-  "next_steps": ["Action 1", "Action 2", "Action 3", "Action 4"],
-  "score_insights": [{"criterion": "nom", "value": N, "insight": "texte"}]
+  "summary": "Resume expert en 3-4 phrases avec avis terrain",
+  "strengths": ["Force 1 avec detail pratique", "Force 2", "Force 3"],
+  "risks": ["Risque 1 + comment l'anticiper", "Risque 2 + solution", "Risque 3"],
+  "next_steps": ["Action concrete 1 (avec qui, quand)", "Action 2", "Action 3", "Action 4"],
+  "expert_tips": ["Astuce terrain 1", "Piege a eviter 1", "Retour d'experience 1"],
+  "score_insights": [{"criterion": "nom", "value": N, "insight": "texte expert"}]
 }
 """
 
@@ -256,25 +404,29 @@ Reponds en JSON strict avec ces champs:
         import json
         message = client.messages.create(
             model="claude-haiku-4-5-20251001",
-            max_tokens=1024,
+            max_tokens=2048,
+            system=SYSTEM_PROMPT,
             messages=[{"role": "user", "content": prompt}],
         )
         text = message.content[0].text
-        # Extract JSON from response
         start = text.find("{")
         end = text.rfind("}") + 1
         if start >= 0 and end > start:
             result = json.loads(text[start:end])
-            result["source"] = "claude"
+            result["source"] = "claude_expert"
             result["phase_summary"] = ""
             if phases_data:
                 completed = sum(1 for p in phases_data if p.get("statut") == "termine")
                 result["phase_summary"] = f"{completed}/{len(phases_data)} blocs termines"
+            # Ensure expert_tips exists
+            if "expert_tips" not in result:
+                result["expert_tips"] = []
             return result
     except Exception as e:
         logger.warning("Claude API error, falling back to template: %s", e)
 
-    return _template_analysis(project_data, score_data, phases_data)
+    return _template_analysis(project_data, score_data, phases_data,
+                              enrichment_data, regulatory_data)
 
 
 # ─── Public API ──────────────────────────────────────────────────
@@ -284,14 +436,22 @@ async def analyze_project(
     project_data: Dict[str, Any],
     score_data: Optional[Dict[str, Any]] = None,
     phases_data: Optional[List[Dict[str, Any]]] = None,
+    enrichment_data: Optional[Dict[str, Any]] = None,
+    regulatory_data: Optional[Dict[str, Any]] = None,
 ) -> Dict[str, Any]:
-    """Analyze a project and return recommendations.
+    """Analyze a project as a senior ENR consultant.
 
-    Uses Claude API if available, otherwise falls back to template-based
-    analysis using filiere-specific knowledge.
+    Uses Claude API if available with expert system prompt,
+    otherwise falls back to enriched template analysis.
+
+    Sprint 14: Now accepts enrichment and regulatory data for
+    contextual expert advice.
 
     Returns:
-        Dict with: summary, strengths, risks, next_steps, score_insights,
-        phase_summary, source ("claude" or "template").
+        Dict with: summary, strengths, risks, next_steps, expert_tips,
+        score_insights, phase_summary, source.
     """
-    return await _claude_analysis(project_data, score_data, phases_data)
+    return await _claude_analysis(
+        project_data, score_data, phases_data,
+        enrichment_data, regulatory_data,
+    )

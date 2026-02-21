@@ -39,6 +39,11 @@ import {
   Leaf,
   Thermometer,
   Loader2,
+  Scale,
+  ClipboardCheck,
+  Timer,
+  Lightbulb,
+  ChevronRight,
 } from "lucide-react";
 import api from "../lib/api";
 import ProjectForm from "../components/ProjectForm";
@@ -333,7 +338,7 @@ function ghiBg(ghi: number | null): string {
   return "bg-red-50";
 }
 
-type TabKey = "overview" | "phases" | "score" | "ai" | "documents";
+type TabKey = "overview" | "phases" | "score" | "regulatory" | "ai" | "documents";
 
 export default function ProjectDetail() {
   const { id } = useParams<{ id: string }>();
@@ -400,6 +405,45 @@ export default function ProjectDetail() {
     },
   });
 
+  // Sprint 14: Regulatory analysis
+  interface RegulatoryObligation {
+    obligation: string;
+    label: string;
+    regime?: string;
+    rubrique?: string;
+    delai_mois: number;
+    description: string;
+    cout_indicatif?: string;
+    zone_sensible?: boolean;
+    statut: string;
+    tips: string[];
+  }
+
+  interface RegulatoryData {
+    projet_id: string;
+    projet_nom: string;
+    filiere: string;
+    puissance_mwc: number;
+    surface_ha: number | null;
+    enriched: boolean;
+    obligations: RegulatoryObligation[];
+    timeline: { phase: string; duree_mois: string; ordre: number }[];
+    expert_tips: string[];
+    risk_level: "low" | "medium" | "high";
+    nb_obligations: number;
+    zone_sensible: boolean;
+    estimated_delai_max_mois: number;
+  }
+
+  const { data: regulatory } = useQuery<RegulatoryData>({
+    queryKey: ["projet-regulatory", id],
+    queryFn: async () => {
+      const res = await api.get(`/api/projets/${id}/regulatory`);
+      return res.data;
+    },
+    enabled: !!id && activeTab === "regulatory",
+  });
+
   const scoreData = scoreMutation.data;
 
   if (isLoading) {
@@ -429,6 +473,7 @@ export default function ProjectDetail() {
     { key: "overview", label: t("projects.tabOverview") },
     { key: "phases", label: t("projects.tabPhases") },
     { key: "score", label: t("projects.tabScore") },
+    { key: "regulatory", label: t("regulatory.tabLabel") },
     { key: "ai", label: t("ai.tabLabel") },
     { key: "documents", label: t("documents.tabLabel") },
   ];
@@ -978,6 +1023,185 @@ export default function ProjectDetail() {
                 </button>
               </div>
             </div>
+          )}
+        </div>
+      )}
+
+      {/* Tab: Regulatory */}
+      {activeTab === "regulatory" && (
+        <div className="space-y-4">
+          {!regulatory ? (
+            <div className="card flex items-center justify-center py-12 text-slate-400">
+              <Loader2 className="mr-2 h-5 w-5 animate-spin" />
+              {t("regulatory.loading")}
+            </div>
+          ) : (
+            <>
+              {/* Risk level banner */}
+              <div
+                className={`card border-l-4 ${
+                  regulatory.risk_level === "high"
+                    ? "border-l-red-500 bg-red-50 dark:bg-red-500/5"
+                    : regulatory.risk_level === "medium"
+                    ? "border-l-amber-500 bg-amber-50 dark:bg-amber-500/5"
+                    : "border-l-emerald-500 bg-emerald-50 dark:bg-emerald-500/5"
+                }`}
+              >
+                <div className="flex items-center gap-3">
+                  <Scale
+                    className={`h-5 w-5 ${
+                      regulatory.risk_level === "high"
+                        ? "text-red-500"
+                        : regulatory.risk_level === "medium"
+                        ? "text-amber-500"
+                        : "text-emerald-500"
+                    }`}
+                  />
+                  <div>
+                    <h3 className="text-sm font-semibold text-slate-800 dark:text-slate-200">
+                      {t("regulatory.riskLevel")}{" "}
+                      <span
+                        className={`inline-block rounded-full px-2 py-0.5 text-xs font-bold ${
+                          regulatory.risk_level === "high"
+                            ? "bg-red-100 text-red-700 dark:bg-red-500/20 dark:text-red-400"
+                            : regulatory.risk_level === "medium"
+                            ? "bg-amber-100 text-amber-700 dark:bg-amber-500/20 dark:text-amber-400"
+                            : "bg-emerald-100 text-emerald-700 dark:bg-emerald-500/20 dark:text-emerald-400"
+                        }`}
+                      >
+                        {t(`regulatory.risk_${regulatory.risk_level}`)}
+                      </span>
+                    </h3>
+                    <p className="mt-0.5 text-xs text-slate-500 dark:text-slate-400">
+                      {regulatory.nb_obligations} {t("regulatory.obligationsCount")} ·{" "}
+                      {t("regulatory.estimatedDelay")} ~{regulatory.estimated_delai_max_mois} {t("regulatory.months")}
+                      {regulatory.zone_sensible && (
+                        <span className="ml-2 inline-flex items-center gap-1 text-red-600 dark:text-red-400">
+                          <AlertTriangle className="h-3 w-3" />
+                          {t("regulatory.zoneSensible")}
+                        </span>
+                      )}
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              {/* Obligations checklist */}
+              <div className="card">
+                <h3 className="mb-3 flex items-center gap-2 text-sm font-semibold text-slate-700 dark:text-slate-300">
+                  <ClipboardCheck className="h-4 w-4 text-indigo-500" />
+                  {t("regulatory.obligations")}
+                </h3>
+                <div className="space-y-3">
+                  {regulatory.obligations.map((obl, i) => (
+                    <div key={i} className="rounded-lg border border-slate-100 p-3 dark:border-slate-700">
+                      <div className="flex items-start justify-between">
+                        <div className="flex-1">
+                          <div className="flex items-center gap-2">
+                            <span
+                              className={`inline-block h-2 w-2 rounded-full ${
+                                obl.regime === "autorisation"
+                                  ? "bg-red-500"
+                                  : obl.regime === "enregistrement"
+                                  ? "bg-amber-500"
+                                  : "bg-emerald-500"
+                              }`}
+                            />
+                            <span className="text-sm font-medium text-slate-800 dark:text-slate-200">
+                              {obl.label}
+                            </span>
+                          </div>
+                          <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
+                            {obl.description}
+                          </p>
+                          <div className="mt-2 flex flex-wrap gap-2">
+                            <span className="inline-flex items-center gap-1 rounded bg-slate-100 px-2 py-0.5 text-xs text-slate-600 dark:bg-slate-700 dark:text-slate-300">
+                              <Timer className="h-3 w-3" />
+                              ~{obl.delai_mois} {t("regulatory.months")}
+                            </span>
+                            {obl.cout_indicatif && (
+                              <span className="inline-flex items-center rounded bg-slate-100 px-2 py-0.5 text-xs text-slate-600 dark:bg-slate-700 dark:text-slate-300">
+                                {obl.cout_indicatif}
+                              </span>
+                            )}
+                            {obl.rubrique && (
+                              <span className="inline-flex items-center rounded bg-indigo-50 px-2 py-0.5 text-xs text-indigo-600 dark:bg-indigo-500/10 dark:text-indigo-400">
+                                {t("regulatory.rubrique")} {obl.rubrique}
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Expert tips per obligation */}
+                      {obl.tips.length > 0 && (
+                        <div className="mt-3 space-y-1.5 border-t border-slate-100 pt-2 dark:border-slate-700">
+                          {obl.tips.map((tip, j) => (
+                            <div key={j} className="flex items-start gap-2 text-xs">
+                              <Lightbulb className="mt-0.5 h-3 w-3 flex-shrink-0 text-amber-500" />
+                              <span className="text-slate-600 dark:text-slate-400">{tip}</span>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* Timeline */}
+              <div className="card">
+                <h3 className="mb-3 flex items-center gap-2 text-sm font-semibold text-slate-700 dark:text-slate-300">
+                  <Clock className="h-4 w-4 text-teal-500" />
+                  {t("regulatory.timeline")}
+                </h3>
+                <div className="relative space-y-0">
+                  {regulatory.timeline.map((phase, i) => (
+                    <div key={i} className="flex items-start gap-3 pb-3">
+                      <div className="flex flex-col items-center">
+                        <div className="flex h-6 w-6 items-center justify-center rounded-full bg-indigo-100 text-xs font-bold text-indigo-600 dark:bg-indigo-500/20 dark:text-indigo-400">
+                          {phase.ordre}
+                        </div>
+                        {i < regulatory.timeline.length - 1 && (
+                          <div className="mt-1 h-full w-px bg-slate-200 dark:bg-slate-700" style={{ minHeight: 16 }} />
+                        )}
+                      </div>
+                      <div className="flex-1 pb-1">
+                        <p className="text-sm font-medium text-slate-700 dark:text-slate-300">{phase.phase}</p>
+                        <p className="text-xs text-slate-400">{phase.duree_mois} {t("regulatory.months")}</p>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* General expert tips */}
+              {regulatory.expert_tips.length > 0 && (
+                <div className="card border border-amber-200 bg-amber-50/50 dark:border-amber-500/20 dark:bg-amber-500/5">
+                  <h3 className="mb-3 flex items-center gap-2 text-sm font-semibold text-amber-700 dark:text-amber-400">
+                    <Lightbulb className="h-4 w-4" />
+                    {t("regulatory.expertTips")}
+                  </h3>
+                  <div className="space-y-2">
+                    {regulatory.expert_tips.map((tip, i) => (
+                      <div key={i} className="flex items-start gap-2 text-xs">
+                        <ChevronRight className="mt-0.5 h-3 w-3 flex-shrink-0 text-amber-500" />
+                        <span className="text-amber-800 dark:text-amber-300">{tip}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Link to enrichment */}
+              {!regulatory.enriched && (
+                <div className="card border border-blue-200 bg-blue-50/50 dark:border-blue-500/20 dark:bg-blue-500/5">
+                  <p className="text-xs text-blue-700 dark:text-blue-400">
+                    {t("regulatory.enrichForBetter")}
+                  </p>
+                </div>
+              )}
+            </>
           )}
         </div>
       )}

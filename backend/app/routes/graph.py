@@ -45,6 +45,7 @@ def _entity_code(entity) -> str:
 @router.get("/knowledge/graph")
 async def knowledge_graph(
     bloc: Optional[str] = Query(None, description="Filter by bloc code (e.g. B1)"),
+    filiere: Optional[str] = Query(None, description="Filter phases by filiere (solaire_sol, eolien_onshore, bess)"),
     entity_types: Optional[str] = Query(
         None,
         description="Comma-separated entity types to include (e.g. normes,risques). "
@@ -120,6 +121,9 @@ async def knowledge_graph(
         .where(Phase.bloc_id.in_(bloc_ids))
         .order_by(Phase.ordre)
     )
+    # Sprint 14: Filter phases by filière when specified
+    if filiere:
+        phase_query = phase_query.where(Phase.filiere.any(filiere))
     phase_result = await db.execute(phase_query)
     phases = phase_result.scalars().all()
 

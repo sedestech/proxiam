@@ -1,11 +1,13 @@
-import { useState, useRef } from "react";
+import { useState, useRef, useEffect } from "react";
 import { useTranslation } from "react-i18next";
+import { useSearchParams } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { Canvas, useFrame } from "@react-three/fiber";
 import { OrbitControls, Text, RoundedBox, Grid } from "@react-three/drei";
 import * as THREE from "three";
 import { Sun, Wind, Battery, Zap, Eye, RotateCcw } from "lucide-react";
 import api from "../lib/api";
+import PillarNav from "../components/PillarNav";
 
 interface Projet {
   id: string;
@@ -209,7 +211,11 @@ function filiereIcon(filiere: string | null) {
 
 export default function Viewer3D() {
   const { t } = useTranslation();
+  const [searchParams] = useSearchParams();
   const [selectedId, setSelectedId] = useState<string | null>(null);
+
+  // Deep link: read ?entity=projet&id=123 to auto-select a project
+  const deepLinkId = searchParams.get("id");
 
   const { data: projects } = useQuery<Projet[]>({
     queryKey: ["projets-3d"],
@@ -219,6 +225,13 @@ export default function Viewer3D() {
     },
     staleTime: 5 * 60 * 1000,
   });
+
+  // Deep link: auto-select project from query param once data loads
+  useEffect(() => {
+    if (!deepLinkId || !projects) return;
+    const match = projects.find((p) => p.id === deepLinkId);
+    if (match) setSelectedId(match.id);
+  }, [deepLinkId, projects]);
 
   const selectedProject = projects?.find((p) => p.id === selectedId);
 
@@ -335,6 +348,9 @@ export default function Viewer3D() {
           {projects?.length ?? 0} projets
         </div>
       </div>
+
+      {/* Cross-pillar navigation */}
+      <PillarNav />
     </div>
   );
 }

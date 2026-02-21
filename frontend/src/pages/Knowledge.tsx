@@ -1,5 +1,6 @@
 import { useState, useCallback, useEffect } from "react";
 import { useTranslation } from "react-i18next";
+import { useSearchParams } from "react-router-dom";
 import ReactFlow, {
   Controls,
   MiniMap,
@@ -33,6 +34,7 @@ import {
 import { BlocNode, EntityNode } from "../components/graph";
 import { useKnowledgeGraph } from "../hooks/useKnowledgeGraph";
 import { ENTITY_COLORS, BLOC_INFO, type GraphNode } from "../lib/types";
+import PillarNav from "../components/PillarNav";
 
 // ─── Constants ───
 
@@ -281,9 +283,15 @@ function MobileListView({
 
 export default function Knowledge() {
   const { t } = useTranslation();
+  const [searchParams] = useSearchParams();
+
+  // Deep link: read ?bloc=B1 to auto-select a bloc, ?entity=phase&id=123 to focus a node
+  const deepLinkBloc = searchParams.get("bloc");
+  const deepLinkEntity = searchParams.get("entity");
+  const deepLinkId = searchParams.get("id");
 
   // State: selected bloc, visible entity types, detail panel
-  const [selectedBloc, setSelectedBloc] = useState<string | null>(null);
+  const [selectedBloc, setSelectedBloc] = useState<string | null>(deepLinkBloc);
   const [visibleTypes, setVisibleTypes] = useState<Set<string>>(
     new Set(ALL_ENTITY_TYPES),
   );
@@ -335,6 +343,29 @@ export default function Knowledge() {
   );
 
   const closeDetail = useCallback(() => setSelectedNode(null), []);
+
+  // Deep link: auto-select bloc from query param
+  useEffect(() => {
+    if (deepLinkBloc && BLOC_CODES.includes(deepLinkBloc)) {
+      setSelectedBloc(deepLinkBloc);
+    }
+  }, [deepLinkBloc]);
+
+  // Deep link: auto-focus a node from query param once graph loads
+  useEffect(() => {
+    if (!deepLinkEntity || !deepLinkId || isLoading) return;
+    const targetNode = graphNodes.find(
+      (n) => n.id === `${deepLinkEntity}-${deepLinkId}` || n.id === deepLinkId,
+    );
+    if (targetNode) {
+      const graphNode: GraphNode = {
+        id: targetNode.id,
+        type: targetNode.type || "unknown",
+        data: targetNode.data,
+      };
+      setSelectedNode(graphNode);
+    }
+  }, [deepLinkEntity, deepLinkId, graphNodes, isLoading]);
 
   // MiniMap node color
   const minimapNodeColor = useCallback((node: Node) => {
@@ -583,6 +614,9 @@ export default function Knowledge() {
           </div>
         </div>
       </div>
+
+      {/* Cross-pillar navigation */}
+      <PillarNav />
     </>
   );
 }

@@ -1,11 +1,13 @@
 import { useEffect, useRef, useState, useCallback, useMemo } from "react";
 import { useTranslation } from "react-i18next";
+import { useSearchParams } from "react-router-dom";
 import { Layers, Loader2, AlertCircle, Eye, EyeOff, MapPin, Search, Crosshair, X, SlidersHorizontal } from "lucide-react";
 import maplibregl from "maplibre-gl";
 import "maplibre-gl/dist/maplibre-gl.css";
 import { usePosteSources } from "../hooks/usePosteSources";
 import type { PosteSourceGeoJSON } from "../hooks/usePosteSources";
 import api from "../lib/api";
+import PillarNav from "../components/PillarNav";
 
 // ─── Constants ───
 
@@ -184,6 +186,10 @@ function useMapLibre(containerRef: React.RefObject<HTMLDivElement | null>) {
 
 export default function Map() {
   const { t } = useTranslation();
+  const [searchParams] = useSearchParams();
+
+  // Deep link: read ?highlight=poste_123 to auto-select a feature
+  const highlightId = searchParams.get("highlight");
 
   const mapContainerRef = useRef<HTMLDivElement>(null);
   const { mapRef, ready, sourceAddedRef } = useMapLibre(mapContainerRef);
@@ -296,6 +302,17 @@ export default function Map() {
       return next;
     });
   }, []);
+
+  // Deep link: highlight a specific poste source from query param
+  useEffect(() => {
+    if (!highlightId || !ready || !geojson) return;
+    const feature = geojson.features.find(
+      (f) => String(f.properties.id) === highlightId || f.properties.nom === highlightId,
+    );
+    if (!feature) return;
+    const [lon, lat] = (feature.geometry as GeoJSON.Point).coordinates;
+    mapRef.current?.flyTo({ center: [lon, lat], zoom: 12, duration: 1500 });
+  }, [highlightId, ready, geojson, mapRef]);
 
   return (
     <div className="flex h-full animate-fade-in">
@@ -577,6 +594,9 @@ export default function Map() {
 
         <div ref={mapContainerRef} className="h-full w-full" />
       </div>
+
+      {/* Cross-pillar navigation */}
+      <PillarNav />
     </div>
   );
 }

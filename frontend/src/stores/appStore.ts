@@ -5,8 +5,10 @@ type Theme = "light" | "dark" | "system";
 interface AppState {
   sidebarOpen: boolean;
   theme: Theme;
+  hasSeenOnboarding: boolean;
   toggleSidebar: () => void;
   setTheme: (theme: Theme) => void;
+  setHasSeenOnboarding: (v: boolean) => void;
 }
 
 function getInitialTheme(): Theme {
@@ -44,9 +46,14 @@ window
 export const useAppStore = create<AppState>((set) => ({
   sidebarOpen: true,
   theme: getInitialTheme(),
+  hasSeenOnboarding: localStorage.getItem("proxiam-onboarding-seen") === "true",
   toggleSidebar: () => set((state) => ({ sidebarOpen: !state.sidebarOpen })),
   setTheme: (theme) => {
     applyTheme(theme);
     set({ theme });
+  },
+  setHasSeenOnboarding: (v) => {
+    localStorage.setItem("proxiam-onboarding-seen", String(v));
+    set({ hasSeenOnboarding: v });
   },
 }));

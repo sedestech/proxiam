@@ -30,6 +30,8 @@ import {
   Info,
 } from "lucide-react";
 import api from "../lib/api";
+import OnboardingWizard from "../components/OnboardingWizard";
+import { useAppStore } from "../stores/appStore";
 
 interface Stats {
   phases: number;
@@ -119,6 +121,7 @@ function filiereIcon(filiere: string | null) {
 export default function Dashboard() {
   const { t } = useTranslation();
   const navigate = useNavigate();
+  const hasSeenOnboarding = useAppStore((s) => s.hasSeenOnboarding);
 
   const { data: stats } = useQuery<Stats>({
     queryKey: ["stats"],
@@ -618,6 +621,9 @@ export default function Dashboard() {
           </div>
         </div>
       </div>
+
+      {/* Onboarding wizard for first-time users */}
+      {!hasSeenOnboarding && <OnboardingWizard />}
     </div>
   );
 }

@@ -14,6 +14,7 @@ from app.models.poste_source import PosteSource
 from app.models.contrainte import Natura2000, Znieff
 from app.models.data_source_status import DataSourceStatus  # noqa: F401
 from app.models.geo_layer import GeoLayer  # noqa: F401
+from app.models.subscription import Subscription, ApiKey, ProjectShare  # noqa: F401
 from app.models.relations import (
     PhaseLivrable,
     PhaseNorme,
@@ -49,6 +50,9 @@ __all__ = [
     "Znieff",
     "DataSourceStatus",
     "GeoLayer",
+    "Subscription",
+    "ApiKey",
+    "ProjectShare",
     "PhaseLivrable",
     "PhaseNorme",
     "PhaseRisque",

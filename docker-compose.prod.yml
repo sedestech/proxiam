@@ -1,4 +1,7 @@
-version: "3.8"
+# Proxiam v3.0.0 — Production Stack
+# Architecture : Nginx VPS (SSL + proxy) → Frontend container (port 3000) → Backend (port 8000)
+# Nginx VPS gère les ports 80/443 + SSL Let's Encrypt + pages de garde
+# Aucun port exposé sur 0.0.0.0 — tout en 127.0.0.1
 
 services:
   # ─── PostgreSQL 16 + PostGIS 3.4 ───
@@ -25,18 +28,56 @@ services:
     image: redis:7-alpine
     container_name: proxiam-redis
     restart: always
-    command: redis-server --maxmemory 256mb --maxmemory-policy allkeys-lru
+    command: redis-server --maxmemory 256mb --maxmemory-policy allkeys-lru --requirepass ${REDIS_PASSWORD}
     volumes:
       - redis_data:/data
     networks:
       - proxiam-net
     healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
+      test: ["CMD", "redis-cli", "-a", "${REDIS_PASSWORD}", "ping"]
       interval: 10s
       timeout: 5s
       retries: 5
 
-  # ─── Backend (FastAPI) ───
+  # ─── Meilisearch ───
+  meilisearch:
+    image: getmeili/meilisearch:v1.12
+    container_name: proxiam-meili
+    restart: always
+    environment:
+      MEILI_MASTER_KEY: ${MEILI_MASTER_KEY}
+      MEILI_ENV: production
+      MEILI_NO_ANALYTICS: "true"
+    volumes:
+      - meili_data:/meili_data
+    networks:
+      - proxiam-net
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:7700/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ─── MinIO (S3-compatible storage) ───
+  minio:
+    image: minio/minio:latest
+    container_name: proxiam-minio
+    restart: always
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ACCESS_KEY}
+      MINIO_ROOT_PASSWORD: ${MINIO_SECRET_KEY}
+    command: server /data --console-address ":9001"
+    volumes:
+      - minio_data:/data
+    networks:
+      - proxiam-net
+    healthcheck:
+      test: ["CMD", "mc", "ready", "local"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ─── Backend (FastAPI) — non-root ───
   backend:
     build:
       context: ./backend
@@ -49,8 +90,6 @@ services:
       REDIS_HOST: redis
       MEILI_HOST: http://meilisearch:7700
       MINIO_ENDPOINT: minio:9000
-    expose:
-      - "8000"
     networks:
       - proxiam-net
     depends_on:
@@ -58,43 +97,31 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
+      meilisearch:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
       interval: 30s
       timeout: 5s
-      start_period: 15s
+      start_period: 30s
       retries: 3
 
   # ─── Frontend (React + Nginx) ───
+  # Nginx interne proxy /api/ → backend:8000 via Docker network
+  # Seul service exposé au host (127.0.0.1 uniquement)
   frontend:
     build:
       context: ./frontend
       dockerfile: Dockerfile
     container_name: proxiam-ui
     restart: always
-    expose:
-      - "3000"
-    networks:
-      - proxiam-net
-    depends_on:
-      - backend
-
-  # ─── Caddy (Reverse Proxy + Auto HTTPS) ───
-  caddy:
-    image: caddy:2-alpine
-    container_name: proxiam-caddy
-    restart: always
     ports:
-      - "80:80"
-      - "443:443"
-    volumes:
-      - ./Caddyfile:/etc/caddy/Caddyfile:ro
-      - caddy_data:/data
-      - caddy_config:/config
+      - "127.0.0.1:3000:3000"
     networks:
       - proxiam-net
     depends_on:
-      - frontend
       - backend
 
 networks:
@@ -104,6 +131,5 @@ networks:
 volumes:
   pg_data:
   redis_data:
-  caddy_data:
-  caddy_config:
+  meili_data:
   minio_data:

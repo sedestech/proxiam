@@ -13,6 +13,7 @@ from app.models.projet import Projet, ProjetPhase, ProjetRisque, ProjetDocument
 from app.models.poste_source import PosteSource
 from app.models.contrainte import Natura2000, Znieff
 from app.models.data_source_status import DataSourceStatus  # noqa: F401
+from app.models.geo_layer import GeoLayer  # noqa: F401
 from app.models.relations import (
     PhaseLivrable,
     PhaseNorme,
@@ -47,6 +48,7 @@ __all__ = [
     "Natura2000",
     "Znieff",
     "DataSourceStatus",
+    "GeoLayer",
     "PhaseLivrable",
     "PhaseNorme",
     "PhaseRisque",

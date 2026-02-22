@@ -8,6 +8,8 @@ import { usePosteSources } from "../hooks/usePosteSources";
 import type { PosteSourceGeoJSON } from "../hooks/usePosteSources";
 import api from "../lib/api";
 import PillarNav from "../components/PillarNav";
+import LayerPanel from "../components/map/LayerPanel";
+import GeoJsonDropZone from "../components/map/GeoJsonDropZone";
 
 // ─── Constants ───
 
@@ -202,6 +204,7 @@ export default function Map() {
   const [nearestMode, setNearestMode] = useState(false);
   const [nearestResults, setNearestResults] = useState<NearestResult[]>([]);
   const [nearestLoading, setNearestLoading] = useState(false);
+  const [visibleCustomLayers, setVisibleCustomLayers] = useState<Set<string>>(new Set());
   const [mobileFiltersOpen, setMobileFiltersOpen] = useState(false);
   const nearestMarkerRef = useRef<maplibregl.Marker | null>(null);
 
@@ -594,6 +597,22 @@ export default function Map() {
 
         <div ref={mapContainerRef} className="h-full w-full" />
       </div>
+
+      {/* GeoJSON drag-and-drop overlay */}
+      <GeoJsonDropZone />
+
+      {/* Layer panel (right side) */}
+      <LayerPanel
+        visibleLayers={visibleCustomLayers}
+        onToggle={(id) =>
+          setVisibleCustomLayers((prev) => {
+            const next = new Set(prev);
+            if (next.has(id)) next.delete(id);
+            else next.add(id);
+            return next;
+          })
+        }
+      />
 
       {/* Cross-pillar navigation */}
       <PillarNav />

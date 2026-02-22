@@ -1,7 +1,7 @@
 from typing import Optional
 import json
 
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import JSONResponse
 from sqlalchemy import select, text
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -175,3 +175,45 @@ async def nearest_poste(
     result = await db.execute(query, {"lon": lon, "lat": lat, "limit": limit})
     rows = result.mappings().all()
     return [dict(r) for r in rows]
+
+
+# ── Spatial analysis endpoints (Sprint 21) ──
+
+
+@router.get("/spatial/buffer")
+async def spatial_buffer(
+    lon: float = Query(...),
+    lat: float = Query(...),
+    radius_km: float = Query(10, ge=1, le=50),
+    db: AsyncSession = Depends(get_db),
+):
+    """Buffer analysis around a point."""
+    from app.services.spatial import buffer_analysis
+
+    return await buffer_analysis(db, lon, lat, radius_km)
+
+
+@router.get("/spatial/score")
+async def spatial_score(
+    lon: float = Query(...),
+    lat: float = Query(...),
+    db: AsyncSession = Depends(get_db),
+):
+    """Geographic suitability score for a location."""
+    from app.services.spatial import geographic_score
+
+    return await geographic_score(db, lon, lat)
+
+
+@router.post("/spatial/intersect")
+async def spatial_intersect(
+    body: dict,
+    db: AsyncSession = Depends(get_db),
+):
+    """Check intersections of a GeoJSON geometry."""
+    geojson = body.get("geometry")
+    if not geojson:
+        raise HTTPException(400, "Missing 'geometry' in body")
+    from app.services.spatial import intersection_analysis
+
+    return await intersection_analysis(db, geojson)

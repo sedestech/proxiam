@@ -23,6 +23,7 @@ const SearchResults = lazy(() => import("./pages/SearchResults"));
 const Compare = lazy(() => import("./pages/Compare"));
 const SignIn = lazy(() => import("./pages/SignIn"));
 const Billing = lazy(() => import("./pages/Billing"));
+const Predictions = lazy(() => import("./pages/Predictions"));
 
 function PageWrapper({ children }: { children: React.ReactNode }) {
   return (
@@ -54,6 +55,7 @@ export default function App() {
         <Route path="search" element={<PageWrapper><SearchResults /></PageWrapper>} />
         <Route path="settings" element={<PageWrapper><Settings /></PageWrapper>} />
         <Route path="billing" element={<PageWrapper><Billing /></PageWrapper>} />
+        <Route path="predictions" element={<PageWrapper><Predictions /></PageWrapper>} />
       </Route>
     </Routes>
   );

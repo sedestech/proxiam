@@ -15,6 +15,7 @@ from app.models.contrainte import Natura2000, Znieff
 from app.models.data_source_status import DataSourceStatus  # noqa: F401
 from app.models.geo_layer import GeoLayer  # noqa: F401
 from app.models.subscription import Subscription, ApiKey, ProjectShare  # noqa: F401
+from app.models.agent_run import AgentRun, MlPrediction  # noqa: F401
 from app.models.relations import (
     PhaseLivrable,
     PhaseNorme,
@@ -53,6 +54,8 @@ __all__ = [
     "Subscription",
     "ApiKey",
     "ProjectShare",
+    "AgentRun",
+    "MlPrediction",
     "PhaseLivrable",
     "PhaseNorme",
     "PhaseRisque",

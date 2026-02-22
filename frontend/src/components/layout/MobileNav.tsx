@@ -28,6 +28,7 @@ const moreItems = [
   { to: "/3d", icon: Box, labelKey: "nav.viewer3d" },
   { to: "/canvas", icon: Workflow, labelKey: "nav.canvas" },
   { to: "/scoring", icon: Target, labelKey: "nav.scoring" },
+  { to: "/predictions", icon: Brain, labelKey: "nav.predictions" },
   { to: "/admin", icon: Shield, labelKey: "nav.admin" },
   { to: "/settings", icon: Settings, labelKey: "nav.settings" },
 ];

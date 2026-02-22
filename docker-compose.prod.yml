@@ -1,0 +1,109 @@
+version: "3.8"
+
+services:
+  # ─── PostgreSQL 16 + PostGIS 3.4 ───
+  database:
+    image: postgis/postgis:16-3.4
+    container_name: proxiam-db
+    restart: always
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+    volumes:
+      - pg_data:/var/lib/postgresql/data
+    networks:
+      - proxiam-net
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ─── Redis 7 ───
+  redis:
+    image: redis:7-alpine
+    container_name: proxiam-redis
+    restart: always
+    command: redis-server --maxmemory 256mb --maxmemory-policy allkeys-lru
+    volumes:
+      - redis_data:/data
+    networks:
+      - proxiam-net
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ─── Backend (FastAPI) ───
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: proxiam-api
+    restart: always
+    env_file: .env
+    environment:
+      POSTGRES_HOST: database
+      REDIS_HOST: redis
+      MEILI_HOST: http://meilisearch:7700
+      MINIO_ENDPOINT: minio:9000
+    expose:
+      - "8000"
+    networks:
+      - proxiam-net
+    depends_on:
+      database:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 5s
+      start_period: 15s
+      retries: 3
+
+  # ─── Frontend (React + Nginx) ───
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: proxiam-ui
+    restart: always
+    expose:
+      - "3000"
+    networks:
+      - proxiam-net
+    depends_on:
+      - backend
+
+  # ─── Caddy (Reverse Proxy + Auto HTTPS) ───
+  caddy:
+    image: caddy:2-alpine
+    container_name: proxiam-caddy
+    restart: always
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    networks:
+      - proxiam-net
+    depends_on:
+      - frontend
+      - backend
+
+networks:
+  proxiam-net:
+    driver: bridge
+
+volumes:
+  pg_data:
+  redis_data:
+  caddy_data:
+  caddy_config:
+  minio_data:

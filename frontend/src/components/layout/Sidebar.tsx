@@ -13,6 +13,7 @@ import {
   Target,
   Zap,
   CreditCard,
+  Activity,
 } from "lucide-react";
 
 // Conditional Clerk import — works in dev mode without Clerk
@@ -37,6 +38,7 @@ const navItems = [
   { to: "/projects", icon: FolderKanban, labelKey: "nav.projects" },
   { to: "/scoring", icon: Target, labelKey: "nav.scoring" },
   { to: "/predictions", icon: Brain, labelKey: "nav.predictions" },
+  { to: "/monitoring", icon: Activity, labelKey: "nav.monitoring" },
   { to: "/veille", icon: Radar, labelKey: "nav.veille" },
   { to: "/billing", icon: CreditCard, labelKey: "nav.billing" },
   { to: "/settings", icon: Settings, labelKey: "nav.settings" },
@@ -59,7 +61,7 @@ export default function Sidebar() {
     }
   }
 
-  const items = isAdmin ? [...navItems.slice(0, 9), adminItem, ...navItems.slice(9)] : navItems;
+  const items = isAdmin ? [...navItems.slice(0, 10), adminItem, ...navItems.slice(10)] : navItems;
 
   return (
     <aside className="flex h-screen w-[260px] flex-col border-r border-slate-200 bg-white dark:border-slate-700 dark:bg-slate-800">
@@ -104,7 +106,7 @@ export default function Sidebar() {
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2 text-xs text-slate-400 dark:text-slate-500">
             <div className="h-1.5 w-1.5 rounded-full bg-emerald-400" />
-            <span>v2.4.0 — Sprint 23</span>
+            <span>v3.0.0 — Sprint 24</span>
           </div>
           {UserButtonComponent && (
             <UserButtonComponent

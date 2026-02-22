@@ -24,6 +24,7 @@ const Compare = lazy(() => import("./pages/Compare"));
 const SignIn = lazy(() => import("./pages/SignIn"));
 const Billing = lazy(() => import("./pages/Billing"));
 const Predictions = lazy(() => import("./pages/Predictions"));
+const Monitoring = lazy(() => import("./pages/Monitoring"));
 
 function PageWrapper({ children }: { children: React.ReactNode }) {
   return (
@@ -56,6 +57,7 @@ export default function App() {
         <Route path="settings" element={<PageWrapper><Settings /></PageWrapper>} />
         <Route path="billing" element={<PageWrapper><Billing /></PageWrapper>} />
         <Route path="predictions" element={<PageWrapper><Predictions /></PageWrapper>} />
+        <Route path="monitoring" element={<PageWrapper><Monitoring /></PageWrapper>} />
       </Route>
     </Routes>
   );

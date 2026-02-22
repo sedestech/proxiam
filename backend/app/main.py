@@ -14,6 +14,7 @@ from app.routes.data_health import router as data_health_router
 from app.routes.geo_layers import router as geo_layers_router
 from app.routes.billing import router as billing_router
 from app.routes.agents import router as agents_router
+from app.routes.monitoring import router as monitoring_router
 
 
 @asynccontextmanager
@@ -77,3 +78,4 @@ app.include_router(data_health_router, prefix="/api", tags=["data-health"])
 app.include_router(geo_layers_router, prefix="/api", tags=["geo-layers"])
 app.include_router(billing_router, prefix="/api", tags=["billing"])
 app.include_router(agents_router, tags=["agents"])
+app.include_router(monitoring_router, tags=["monitoring"])
